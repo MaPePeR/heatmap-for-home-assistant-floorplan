@@ -1,0 +1,3 @@
+[submodule "vendor/geometry-processing-js"]
+	path = vendor/geometry-processing-js
+	url = https://github.com/GeometryCollective/geometry-processing-js
