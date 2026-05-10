@@ -30,16 +30,17 @@ function generateDistances() {
     if (!sensors || !areas) {
         return
     }
-    const heatmethods = new Array(areas.length)
+    const area_data = new Array(areas.length)
     try {
         for (let i = 0; i < areas.length; i++) {
-            heatmethods[i] = getHeatMethod(areas[i]);
+            area_data[i] = new Area(areas[i], sensors)
         }
     } catch (e) {
         errorcontainer.innerText += ""+e
         throw e
     }
 }
+
 
 function getPolygon(area) {
     const pathdata = area.getPathData({"normalize": true})
@@ -94,9 +95,22 @@ function createMesh(polygon) {
     return mesh
 }
 
-function getHeatMethod(area) {
-    const polygon = getPolygon(area);
-    const mesh = createMesh(polygon);
-    const geometry = new Geometry(mesh, polygon["v"]);
-    return new HeatMethod(geometry);
+class Area {
+    constructor(area, sensors) {
+        this.polygon = getPolygon(area);
+        // TODO: Insert sensors as vertices
+        this.mesh = createMesh(this.polygon);
+        this.geometry = new Geometry(this.mesh, this.polygon["v"]);
+        this.heatmethod = new HeatMethod(this.geometry);
+
+        const V = this.mesh.vertices.length;
+        this.delta = DenseMatrix.zeros(V, 1);
+    }
+
+    calculateForSensor(sensor) {
+        this.delta.set(1, sensor, 0);
+        const result = heatmethod.compute(delta)
+        this.delta.set(0, sensor, 0);
+        return result;
+    }
 }
