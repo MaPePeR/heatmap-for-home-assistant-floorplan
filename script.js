@@ -4,8 +4,9 @@
 loadbutton.addEventListener("click", function () {
     console.log("Handling file change")
     const selectedFile = fileselect.files[0] || null;
+    errorcontainer.innerText = "";
     if (!selectedFile) {
-        console.log("No file selected")
+        errorcontainer.innerText += "No file selected.";
         return;
     }
     const reader = new FileReader();
@@ -18,6 +19,15 @@ loadbutton.addEventListener("click", function () {
 function generateDistances() {
     const areas = floorplancontainer.querySelectorAll('.ha-fp-hm-area');
     const sensors = floorplancontainer.querySelectorAll('.ha-fp-hm-sensor');
+    if (!areas) {
+        errorcontainer.innerText += "No areas with class 'ha-fp-hm-area' found.";
+    }
+    if (!sensors) {
+        errorcontainer.innerText += "No sensors with class 'ha-fp-hm-sensor' found.";
+    }
+    if (!sensors || !areas) {
+        return
+    }
     console.log(areas)
     console.log(sensors)
 }
