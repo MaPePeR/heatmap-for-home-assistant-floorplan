@@ -34,6 +34,13 @@ function generateDistances() {
     try {
         for (let i = 0; i < areas.length; i++) {
             area_data[i] = new Area(areas[i], sensors)
+            for (const sensor of sensors) {
+                console.log("Calculating for ", sensor)
+                const result = area_data[i].calculateForSensor(sensor)
+                for (let i = 0; i < result.nCols(); i++) {
+                    console.log(Array.from({length: result.nRows()}, (_, j) => result.get(j, i)))
+                }
+            }
         }
     } catch (e) {
         errorcontainer.innerText += ""+e
@@ -95,10 +102,65 @@ function createMesh(polygon) {
     return mesh
 }
 
+function getCenterOfElement(el) {
+    const bbox = el.getBBox()
+    return new Vector(
+        bbox.x + bbox.width / 2,
+        bbox.y + bbox.height / 2,
+    )
+}
+
+function vertexInTriangle(pt, v1, v2, v3) {
+    // https://stackoverflow.com/a/2049593/2256700
+    const d1 = (pt.x - v2.x) * (v1.y - v2.y) - (v1.x - v2.x) * (pt.y - v2.y);
+    const d2 = (pt.x - v3.x) * (v2.y - v3.y) - (v2.x - v3.x) * (pt.y - v3.y);
+    const d3 = (pt.x - v1.x) * (v3.y - v1.y) - (v3.x - v1.x) * (pt.y - v1.y);
+
+    const has_neg = (d1 < 0) || (d2 < 0) || (d3 < 0);
+    const has_pos = (d1 > 0) || (d2 > 0) || (d3 > 0);
+
+    return !(has_neg && has_pos);
+}
+
+function insertVertexIntoPolygon(polygon, v) {
+    const vertices = polygon.v;
+    vertices.push(v);
+    const vertex_id = vertices.length - 1;
+    const triangles = polygon.f;
+    const new_triangles = new Array();
+    let found = false;
+    for(let i = 0; i + 3 <= triangles.length; i += 3) {
+        const i1=triangles[i], i2=triangles[i+1], i3=triangles[i+2];
+        if (vertexInTriangle(v, vertices[i1], vertices[i2], vertices[i3])) {
+            if (found) {
+                throw new Error("Found vertex in multiple triangles. Duplicate sensor?");
+            }
+            found = true;
+            new_triangles.push(
+                i1, i2, vertex_id,
+                i1, vertex_id, i3,
+                vertex_id, i2, i3,
+            )
+        } else {
+            new_triangles.push(i1, i2, i3);
+        }
+    }
+    if (!found) {
+        throw new Error("Did not find triangle for vertex");
+    }
+    polygon.f = new_triangles;
+    return vertex_id
+}
+
 class Area {
     constructor(area, sensors) {
         this.polygon = getPolygon(area);
-        // TODO: Insert sensors as vertices
+        this.sensorsToVertexId = new Map();
+
+        for (const sensor of sensors) {
+            const sensorVertexId = insertVertexIntoPolygon(this.polygon, getCenterOfElement(sensor))
+            this.sensorsToVertexId.set(sensor, sensorVertexId)
+        }
         this.mesh = createMesh(this.polygon);
         this.geometry = new Geometry(this.mesh, this.polygon["v"]);
         this.heatmethod = new HeatMethod(this.geometry);
@@ -108,9 +170,10 @@ class Area {
     }
 
     calculateForSensor(sensor) {
-        this.delta.set(1, sensor, 0);
-        const result = heatmethod.compute(delta)
-        this.delta.set(0, sensor, 0);
+        const sensorId = this.sensorsToVertexId.get(sensor);
+        this.delta.set(1, sensorId, 0);
+        const result = this.heatmethod.compute(this.delta)
+        this.delta.set(0, sensorId, 0);
         return result;
     }
 }
