@@ -208,8 +208,8 @@ class Area {
         for(let i = 0; i < this.polygon.f.length; i++) {
             f_buffer[i] = this.polygon.f[i];
         }
-        // https://stackoverflow.com/a/11562550
-        return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)));
+
+        return (new Uint8Array(buffer)).toBase64();
     }
 
     calculateForSensor(sensor) {
@@ -229,7 +229,6 @@ class Area {
 
         memoryManager.deleteExcept([this.delta, this.heatMethod.A, this.heatMethod.F]);
 
-        // https://stackoverflow.com/a/11562550
-        return btoa(String.fromCharCode.apply(null, new Uint8Array(data.buffer)));
+        return (new Uint8Array(data.buffer)).toBase64();
     }
 }
