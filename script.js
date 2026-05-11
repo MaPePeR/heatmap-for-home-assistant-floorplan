@@ -30,18 +30,37 @@ function generateDistances() {
     if (!sensors || !areas) {
         return
     }
-    const area_data = new Array(areas.length)
+    let missingId = false;
+    for (const area of areas) {
+        if (!area.id) {
+            errorcontainer.innerText += "Area is missing id attribute.";
+            missingId = true;
+        }
+    }
+    for (const sensor of sensors) {
+        if (!sensor.id) {
+            errorcontainer.innerText += "Sensor is missing id attribute";
+            missingId = true;
+        }
+    }
+    if (missingId) {
+        return;
+    }
+    const results = {};
     try {
-        for (let i = 0; i < areas.length; i++) {
-            area_data[i] = new Area(areas[i], sensors)
+        for (const area of areas) {
+            const area_data = new Area(area, sensors)
+            const result = {
+                tex: area_data.getTextureData(),
+                sensors: {},
+            };
             for (const sensor of sensors) {
                 console.log("Calculating for ", sensor)
-                const result = area_data[i].calculateForSensor(sensor)
-                for (let i = 0; i < result.nCols(); i++) {
-                    console.log(Array.from({length: result.nRows()}, (_, j) => result.get(j, i)))
-                }
+                result.sensors[sensor.id] = area_data.calculateForSensor(sensor)
             }
+            results[area.id] = result
         }
+        console.log(results)
     } catch (e) {
         errorcontainer.innerText += ""+e
         throw e
@@ -169,11 +188,45 @@ class Area {
         this.delta = DenseMatrix.zeros(V, 1);
     }
 
+    getTextureData() {
+        const buffer = new ArrayBuffer(16/8 + this.polygon.v.length * 2 * 16/8 + this.polygon.f.length * 16 / 8)
+        const view = new DataView(buffer)
+        let pos = 0;
+        view.setUint16(pos, this.polygon.v.length / 2)
+        pos += 16/8;
+        const v_buffer = new Float16Array(buffer, pos, this.polygon.v.length)
+        pos += this.polygon.v.length * 2 * 16 / 8;
+        const f_buffer = new Uint16Array(buffer, pos, this.polygon.f.length);
+        for(let i = 0; i < this.polygon.v.length; i += 1) {
+            const v = this.polygon.v[i];
+            v_buffer[i * 2+0] = v.x;
+            v_buffer[i * 2+1] = v.y;
+        }
+        for(let i = 0; i < this.polygon.f.length; i++) {
+            f_buffer[i] = this.polygon.f[i];
+        }
+        // https://stackoverflow.com/a/11562550
+        return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)));
+    }
+
     calculateForSensor(sensor) {
         const sensorId = this.sensorsToVertexId.get(sensor);
         this.delta.set(1, sensorId, 0);
         const result = this.heatMethod.compute(this.delta)
         this.delta.set(0, sensorId, 0);
-        return result;
+
+        if (result.nRows() != this.polygon.v.length) {
+            throw new Error(`HeatMethod result has wrong dimension. Expected ${this.polygon.v.length}x1. Got ${result.nRows()}x${result.nCols()}`)
+        }
+
+        const data = new Float32Array(this.polygon.v.length);
+        for (let i = 0; i < this.polygon.v.length; i++) {
+            data[i] = result.get(i, 0);
+        }
+
+        memoryManager.deleteExcept([this.delta, this.heatMethod.A, this.heatMethod.F]);
+
+        // https://stackoverflow.com/a/11562550
+        return btoa(String.fromCharCode.apply(null, new Uint8Array(data.buffer)));
     }
 }
