@@ -163,7 +163,7 @@ class Area {
         }
         this.mesh = createMesh(this.polygon);
         this.geometry = new Geometry(this.mesh, this.polygon["v"]);
-        this.heatmethod = new HeatMethod(this.geometry);
+        this.heatMethod = new HeatMethod(this.geometry);
 
         const V = this.mesh.vertices.length;
         this.delta = DenseMatrix.zeros(V, 1);
@@ -172,7 +172,7 @@ class Area {
     calculateForSensor(sensor) {
         const sensorId = this.sensorsToVertexId.get(sensor);
         this.delta.set(1, sensorId, 0);
-        const result = this.heatmethod.compute(this.delta)
+        const result = this.heatMethod.compute(this.delta)
         this.delta.set(0, sensorId, 0);
         return result;
     }
