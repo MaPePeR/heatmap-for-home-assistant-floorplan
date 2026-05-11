@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 const SPACE_TRANSFORM_VERTEX_SHADER = `#version 300 es
-in vec4 a_position;
+
+in vec2 a_position;
 in float a_distance;
-uniform mat4 u_matrix;
 out float v_distance;
 void main() {
-  gl_Position = u_matrix * a_position;
-  v_distance = a_distance;
+    gl_Position = vec4(a_position, 0, 1);
+    v_distance = a_distance;
 }
 `;
 
@@ -16,10 +16,10 @@ const BASIC_FRAGMENT_SHADER = `#version 300 es
 
 precision highp float;
 in float v_distance;
-out vec3 outColor;
+out vec4 outColor;
 
 void main() {
-  outColor = vec3(v_distance);
+  outColor = vec4(v_distance, v_distance, 0, 1);
 }
 `;
 
@@ -119,7 +119,54 @@ class Renderer {
             ['a_position', 'a_distance'],
             [],
         )
-        this.ctx.clearColor(1,0,0,1)
-        this.ctx.clear(this.ctx.DEPTH_BUFFER_BIT | this.ctx.COLOR_BUFFER_BIT)
+
+        this.vertexBuffer = this.ctx.createBuffer();
+        this.vertexArray = this.ctx.createVertexArray();
+        
+        this.ctx.bindVertexArray(this.vertexArray);
+        this.ctx.enableVertexAttribArray(this.renderTexProgram.attributes.get("a_position"));
+        this.ctx.bindBuffer(this.ctx.ARRAY_BUFFER, this.vertexBuffer);
+        this.ctx.vertexAttribPointer(
+            this.renderTexProgram.attributes.get("a_position"),
+            2, this.ctx.FLOAT,
+            false, 0, 0
+        )
+        this.ctx.bufferData(this.ctx.ARRAY_BUFFER, new Float32Array(this.areaTex.get('area').v), this.ctx.STATIC_DRAW)
+
+        this.triangleBuffer = this.ctx.createBuffer();
+        this.ctx.bindBuffer(this.ctx.ELEMENT_ARRAY_BUFFER, this.triangleBuffer);
+        this.ctx.bufferData(this.ctx.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.areaTex.get('area').f), this.ctx.STATIC_DRAW)
+
+        this.distanceBuffer = this.ctx.createBuffer();
+        this.ctx.enableVertexAttribArray(this.renderTexProgram.attributes.get("a_distance"));
+        this.ctx.bindBuffer(this.ctx.ARRAY_BUFFER, this.distanceBuffer);
+        this.ctx.vertexAttribPointer(
+            this.renderTexProgram.attributes.get("a_distance"),
+            1, this.ctx.FLOAT,
+            false, 0, 0
+        )
+        this.ctx.bufferData(this.ctx.ARRAY_BUFFER, new Float32Array(this.sensorData.get("path2")), this.ctx.STATIC_DRAW)
+
+        this.render()
+    }
+
+    render() {
+        requestAnimationFrame(() => {
+            const ctx = this.ctx;
+            const rect = this.canvas.getBoundingClientRect()
+            if (this.canvas.width != rect.width || this.canvas.height != rect.height) {
+                this.canvas.width = rect.width;
+                this.canvas.height = rect.height;
+            }
+            ctx.viewport(0, 0, ctx.canvas.width, ctx.canvas.height);
+            ctx.clearColor(0,0,0,0);
+            ctx.clear(ctx.COLOR_BUFFER_BIT);
+            
+            ctx.useProgram(this.renderTexProgram.prog)
+
+            ctx.bindVertexArray(this.vertexArray);
+
+            ctx.drawElements(ctx.TRIANGLES, this.areaTex.get('area').f.length, ctx.UNSIGNED_SHORT, 0);
+        })
     }
 }
