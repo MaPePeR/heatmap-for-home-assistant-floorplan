@@ -30,8 +30,8 @@ function generateDistances() {
     if (!sensors || !areas) {
         return
     }
-    if (floorplancontainer.querySelectorAll('canvas.ha-fp-hm').length != 1) {
-        errorcontainer.innerText += "Cannot find canvas.ha-fp-hm in floorplan";
+    if (floorplancontainer.querySelectorAll('foreignObject > canvas.ha-fp-hm').length != 1) {
+        errorcontainer.innerText += "Cannot find exactly one 'foreignObject > canvas.ha-fp-hm' in floorplan";
     }
     let missingId = false;
     for (const area of areas) {

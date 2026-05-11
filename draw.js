@@ -1,6 +1,28 @@
 // Copyright 2026 MaPePeR
 // SPDX-License-Identifier: AGPL-3.0-only
 
+const SPACE_TRANSFORM_VERTEX_SHADER = `#version 300 es
+in vec4 a_position;
+in float a_distance;
+uniform mat4 u_matrix;
+out float v_distance;
+void main() {
+  gl_Position = u_matrix * a_position;
+  v_distance = a_distance;
+}
+`;
+
+const BASIC_FRAGMENT_SHADER = `#version 300 es
+
+precision highp float;
+in float v_distance;
+out vec3 outColor;
+
+void main() {
+  outColor = vec3(v_distance);
+}
+`;
+
 function readTex(tex) {
     const buffer = Uint8Array.fromBase64(tex).buffer
     const view = new DataView(buffer)
@@ -18,8 +40,33 @@ function readSensorData(data) {
 
 let renderer = null;
 function createRenderer(data) {
-    const canvas = floorplancontainer.querySelector('canvas.ha-fp-hm')
-    renderer = new Renderer(data, canvas)
+    const canvas = document.querySelector('foreignObject > canvas.ha-fp-hm');
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    renderer = new Renderer(data, canvas);
+}
+
+function compileShader(ctx, code, type) {
+    const shader = ctx.createShader(type);
+    ctx.shaderSource(shader, code);
+    ctx.compileShader(shader);
+    if (!ctx.getShaderParameter(shader, ctx.COMPILE_STATUS)) {
+        throw new Error(`Failed to compile ${type == ctx.VERTEX_SHADER ? "vertex" : "fragment"} shader: ${ctx.getShaderInfoLog(shader)}`);
+    }
+    return shader;
+}
+
+function createProgram(ctx, vertex_code, fragment_code) {
+    const program = ctx.createProgram()
+    ctx.attachShader(program, compileShader(ctx, vertex_code, ctx.VERTEX_SHADER));
+    ctx.attachShader(program, compileShader(ctx, fragment_code, ctx.FRAGMENT_SHADER));
+
+    ctx.linkProgram(program);
+
+    if (!ctx.getProgramParameter(program, ctx.LINK_STATUS)) {
+        throw new Error(`Error linking shader program: ${ctx.getProgramInfoLog(program)}`);
+    }
+    return program;
 }
 
 class Renderer {
@@ -40,5 +87,16 @@ class Renderer {
                 this.sensorData.set(sensorId, readSensorData(area_data.sensors[sensorId]))
             }
         }
+        this.ctx = canvas.getContext("webgl2");
+        if (!this.ctx) {
+            throw new Error("Couldn't get WebGL2 Context");
+        }
+        this.renderTexProgram = createProgram(
+            this.ctx,
+            SPACE_TRANSFORM_VERTEX_SHADER,
+            BASIC_FRAGMENT_SHADER,
+        )
+        this.ctx.clearColor(1,0,0,1)
+        this.ctx.clear(this.ctx.DEPTH_BUFFER_BIT | this.ctx.COLOR_BUFFER_BIT)
     }
 }
