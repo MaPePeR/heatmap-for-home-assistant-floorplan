@@ -145,7 +145,7 @@ class Renderer {
             1, this.ctx.FLOAT,
             false, 0, 0
         )
-        this.ctx.bufferData(this.ctx.ARRAY_BUFFER, new Float32Array(this.sensorData.get("path2")), this.ctx.STATIC_DRAW)
+        this.ctx.bufferData(this.ctx.ARRAY_BUFFER, new Float32Array(this.sensorData.get("examplesensor")), this.ctx.STATIC_DRAW)
 
         this.render()
     }
