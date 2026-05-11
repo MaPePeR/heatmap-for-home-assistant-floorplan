@@ -94,11 +94,12 @@ class Renderer {
         this.canvas = canvas;
         this.areaTex = new Map();
         this.sensorData = new Map();
-        for (const areaId in data) {
+        for (let areaId in data) {
             if (!Object.hasOwnProperty.call(data, areaId)) {
                 continue;
             }
             const area_data = data[areaId];
+            areaId = 'area'
             this.areaTex.set(areaId, readTex(area_data.tex))
             for(const sensorId in area_data.sensors) {
                 if (!Object.hasOwnProperty.call(area_data.sensors, sensorId)) {
