@@ -56,7 +56,7 @@ function compileShader(ctx, code, type) {
     return shader;
 }
 
-function createProgram(ctx, vertex_code, fragment_code) {
+function createProgram(ctx, vertex_code, fragment_code, attributes, uniforms) {
     const program = ctx.createProgram()
     ctx.attachShader(program, compileShader(ctx, vertex_code, ctx.VERTEX_SHADER));
     ctx.attachShader(program, compileShader(ctx, fragment_code, ctx.FRAGMENT_SHADER));
@@ -66,7 +66,27 @@ function createProgram(ctx, vertex_code, fragment_code) {
     if (!ctx.getProgramParameter(program, ctx.LINK_STATUS)) {
         throw new Error(`Error linking shader program: ${ctx.getProgramInfoLog(program)}`);
     }
-    return program;
+    const found_attributes = new Map();
+    for (const attribute of attributes) {
+        const loc = ctx.getAttribLocation(program, attribute);
+        if (loc < 0) {
+            throw new Error(`Cannot find attribute ${attribute}`)
+        }
+        found_attributes.set(attribute, loc)
+    }
+    const found_uniforms = new Map();
+    for (const uniform of uniforms) {
+        const loc = ctx.getUniformLocation(program, uniform);
+        if (!loc) {
+            throw new Error(`Cannot find uniform ${uniform}`)
+        }
+        found_uniforms.set(uniform, loc)
+    }
+    return {
+        prog: program,
+        attributes: found_attributes,
+        uniforms: found_uniforms,
+    }
 }
 
 class Renderer {
@@ -95,6 +115,8 @@ class Renderer {
             this.ctx,
             SPACE_TRANSFORM_VERTEX_SHADER,
             BASIC_FRAGMENT_SHADER,
+            ['a_position', 'a_distance'],
+            [],
         )
         this.ctx.clearColor(1,0,0,1)
         this.ctx.clear(this.ctx.DEPTH_BUFFER_BIT | this.ctx.COLOR_BUFFER_BIT)
