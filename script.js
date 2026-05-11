@@ -30,9 +30,12 @@ function generateDistances() {
     if (!sensors || !areas) {
         return
     }
-    if (floorplancontainer.querySelectorAll('foreignObject > canvas.ha-fp-hm').length != 1) {
+    const canvases = floorplancontainer.querySelectorAll('foreignObject > canvas.ha-fp-hm');
+    if (canvases.length != 1) {
         errorcontainer.innerText += "Cannot find exactly one 'foreignObject > canvas.ha-fp-hm' in floorplan";
+        return
     }
+    const canvas = canvases[0];
     let missingId = false;
     for (const area of areas) {
         if (!area.id) {
@@ -52,7 +55,7 @@ function generateDistances() {
     const results = {};
     try {
         for (const area of areas) {
-            const area_data = new Area(area, sensors)
+            const area_data = new Area(area, sensors, canvas)
             const result = {
                 tex: area_data.getTextureData(),
                 sensors: {},
@@ -77,28 +80,37 @@ function generateDistances() {
 
 function getPolygon(area) {
     const pathdata = area.getPathData({"normalize": true})
+    const svg2screen = area.getScreenCTM();
     if (pathdata[0].type != "M") {
         throw new Error("First Area Path Command is not Move");
     }
+    let x = pathdata[0].values[0]
+    let y = pathdata[0].values[1]
+    let screen_x = x * svg2screen.a + y * svg2screen.b + svg2screen.e;
+    let screen_y = x * svg2screen.c + y * svg2screen.d + svg2screen.f;
     const vertices_geometry = [
         new Vector(
-            pathdata[0].values[0],
-            pathdata[0].values[1],
+            screen_x,
+            screen_y,
         )
     ]
     const vertices_earcut = [
-        pathdata[0].values[0],
-        pathdata[0].values[1],
+        screen_x,
+        screen_y,
     ];
     for (let i = 1; i < pathdata.length - 1; i++) {
         const segment = pathdata[i];
+        x = segment.values[0];
+        y = segment.values[1];
+        screen_x = x * svg2screen.a + y * svg2screen.b + svg2screen.e;
+        screen_y = x * svg2screen.c + y * svg2screen.d + svg2screen.f;
         if (segment.type == "L") {
-            vertices_earcut.push(segment.values[0])
-            vertices_earcut.push(segment.values[1])
+            vertices_earcut.push(screen_x)
+            vertices_earcut.push(screen_y)
             vertices_geometry.push(
                 new Vector(
-                    segment.values[0],
-                    segment.values[1],
+                    screen_x,
+                    screen_y,
                 )
             )
         } else {
@@ -118,6 +130,21 @@ function getPolygon(area) {
     };
 }
 
+function transferVector(v, screen2svg, x, y, width, height) {
+    const new_x = screen2svg.a * v.x + screen2svg.b * v.y + screen2svg.e;
+    const new_y = screen2svg.c * v.x + screen2svg.d * v.y + screen2svg.f;
+    return new Vector(
+        2 * ((new_x - x) / width) - 1,
+        (2 * ((new_y - y) / height) - 1) * -1,
+    )
+}
+
+function transferVertexCoordiantes(vertices, screen2svg, x, y, width, height) {
+    for (let i = 0; i < vertices.length; i ++) {
+        vertices[i] = transferVector(vertices[i], screen2svg, x, y, width, height);
+    }
+}
+
 function createMesh(polygon) {
     const mesh = new Mesh()
     console.log("Building mesh")
@@ -129,11 +156,13 @@ function createMesh(polygon) {
 }
 
 function getCenterOfElement(el) {
+    const svg2screen = el.getScreenCTM();
     const bbox = el.getBBox()
-    return new Vector(
-        bbox.x + bbox.width / 2,
-        bbox.y + bbox.height / 2,
-    )
+    const x = bbox.x + bbox.width / 2;
+    const y = bbox.y + bbox.height / 2;
+    const screen_x = x * svg2screen.a + y * svg2screen.b + svg2screen.e;
+    const screen_y = x * svg2screen.c + y * svg2screen.d + svg2screen.f;
+    return new Vector(screen_x, screen_y);
 }
 
 function vertexInTriangle(pt, v1, v2, v3) {
@@ -179,12 +208,35 @@ function insertVertexIntoPolygon(polygon, v) {
 }
 
 class Area {
-    constructor(area, sensors) {
+    constructor(area, sensors, canvas) {
+        const screen2svg = canvas.parentNode.getScreenCTM().inverse();
+        const canvas_x = parseFloat(canvas.parentNode.getAttribute('x'));
+        const canvas_y = parseFloat(canvas.parentNode.getAttribute('y'));
+        const canvas_width = parseFloat(canvas.parentNode.getAttribute('width'));
+        const canvas_height = parseFloat(canvas.parentNode.getAttribute('height'));
+
+        console.log(
+            canvas_x,
+            canvas_y,
+            canvas_width,
+            canvas_height
+        )
         this.polygon = getPolygon(area);
         this.sensorsToVertexId = new Map();
 
+        const convertVector = (v) => transferVector(v, screen2svg, canvas_x, canvas_y, canvas_width, canvas_height);
+        transferVertexCoordiantes(
+            this.polygon.v,
+            screen2svg,
+            canvas_x,
+            canvas_y,
+            canvas_width,
+            canvas_height,
+        )
+        console.log(this.polygon.f)
+
         for (const sensor of sensors) {
-            const sensorVertexId = insertVertexIntoPolygon(this.polygon, getCenterOfElement(sensor))
+            const sensorVertexId = insertVertexIntoPolygon(this.polygon, convertVector(getCenterOfElement(sensor)))
             this.sensorsToVertexId.set(sensor, sensorVertexId)
         }
         this.mesh = createMesh(this.polygon);
