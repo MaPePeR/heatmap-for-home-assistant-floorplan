@@ -30,6 +30,9 @@ function generateDistances() {
     if (!sensors || !areas) {
         return
     }
+    if (floorplancontainer.querySelectorAll('canvas.ha-fp-hm').length != 1) {
+        errorcontainer.innerText += "Cannot find canvas.ha-fp-hm in floorplan";
+    }
     let missingId = false;
     for (const area of areas) {
         if (!area.id) {
@@ -62,6 +65,7 @@ function generateDistances() {
         }
         console.log(results)
         resultcontainer.innerText = JSON.stringify(results, null, "  ");
+        createRenderer(results)
     } catch (e) {
         errorcontainer.innerText += ""+e
         throw e
