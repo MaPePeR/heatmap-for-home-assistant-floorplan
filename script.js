@@ -61,6 +61,7 @@ function generateDistances() {
             results[area.id] = result
         }
         console.log(results)
+        resultcontainer.innerText = JSON.stringify(results, null, "  ");
     } catch (e) {
         errorcontainer.innerText += ""+e
         throw e
