@@ -86,31 +86,27 @@ function getPolygon(area) {
     }
     let x = pathdata[0].values[0]
     let y = pathdata[0].values[1]
-    let screen_x = x * svg2screen.a + y * svg2screen.b + svg2screen.e;
-    let screen_y = x * svg2screen.c + y * svg2screen.d + svg2screen.f;
     const vertices_geometry = [
         new Vector(
-            screen_x,
-            screen_y,
+            x,
+            y,
         )
     ]
     const vertices_earcut = [
-        screen_x,
-        screen_y,
+        x,
+        y,
     ];
     for (let i = 1; i < pathdata.length - 1; i++) {
         const segment = pathdata[i];
         x = segment.values[0];
         y = segment.values[1];
-        screen_x = x * svg2screen.a + y * svg2screen.b + svg2screen.e;
-        screen_y = x * svg2screen.c + y * svg2screen.d + svg2screen.f;
         if (segment.type == "L") {
-            vertices_earcut.push(screen_x)
-            vertices_earcut.push(screen_y)
+            vertices_earcut.push(x)
+            vertices_earcut.push(y)
             vertices_geometry.push(
                 new Vector(
-                    screen_x,
-                    screen_y,
+                    x,
+                    y,
                 )
             )
         } else {
@@ -130,21 +126,6 @@ function getPolygon(area) {
     };
 }
 
-function transferVector(v, screen2svg, x, y, width, height) {
-    const new_x = screen2svg.a * v.x + screen2svg.b * v.y + screen2svg.e;
-    const new_y = screen2svg.c * v.x + screen2svg.d * v.y + screen2svg.f;
-    return new Vector(
-        2 * ((new_x - x) / width) - 1,
-        (2 * ((new_y - y) / height) - 1) * -1,
-    )
-}
-
-function transferVertexCoordiantes(vertices, screen2svg, x, y, width, height) {
-    for (let i = 0; i < vertices.length; i ++) {
-        vertices[i] = transferVector(vertices[i], screen2svg, x, y, width, height);
-    }
-}
-
 function createMesh(polygon) {
     const mesh = new Mesh()
     console.log("Building mesh")
@@ -156,13 +137,10 @@ function createMesh(polygon) {
 }
 
 function getCenterOfElement(el) {
-    const svg2screen = el.getScreenCTM();
     const bbox = el.getBBox()
     const x = bbox.x + bbox.width / 2;
     const y = bbox.y + bbox.height / 2;
-    const screen_x = x * svg2screen.a + y * svg2screen.b + svg2screen.e;
-    const screen_y = x * svg2screen.c + y * svg2screen.d + svg2screen.f;
-    return new Vector(screen_x, screen_y);
+    return new Vector(x, y);
 }
 
 function vertexInTriangle(pt, v1, v2, v3) {
@@ -209,38 +187,42 @@ function insertVertexIntoPolygon(polygon, v) {
 
 class Area {
     constructor(area, sensors, canvas) {
-        const screen2svg = canvas.parentNode.getScreenCTM().inverse();
-        const canvas_x = parseFloat(canvas.parentNode.getAttribute('x'));
-        const canvas_y = parseFloat(canvas.parentNode.getAttribute('y'));
-        const canvas_width = parseFloat(canvas.parentNode.getAttribute('width'));
-        const canvas_height = parseFloat(canvas.parentNode.getAttribute('height'));
-
-        console.log(
-            canvas_x,
-            canvas_y,
-            canvas_width,
-            canvas_height
-        )
         this.polygon = getPolygon(area);
         this.sensorsToVertexId = new Map();
 
-        const convertVector = (v) => transferVector(v, screen2svg, canvas_x, canvas_y, canvas_width, canvas_height);
-        transferVertexCoordiantes(
-            this.polygon.v,
-            screen2svg,
-            canvas_x,
-            canvas_y,
-            canvas_width,
-            canvas_height,
-        )
-        console.log(this.polygon.f)
+        
 
         for (const sensor of sensors) {
-            const sensorVertexId = insertVertexIntoPolygon(this.polygon, convertVector(getCenterOfElement(sensor)))
+            const vertex = getCenterOfElement(sensor)
+            const sensorVertexId = insertVertexIntoPolygon(this.polygon, vertex)
             this.sensorsToVertexId.set(sensor, sensorVertexId)
         }
-        this.mesh = createMesh(this.polygon);
-        this.geometry = new Geometry(this.mesh, this.polygon["v"]);
+
+        const polygon_copy = {v: Array.from(this.polygon.v, (v) => new Vector(v.x, v.y)), f: this.polygon.f}
+
+
+        const area2screen = area.getScreenCTM();
+        const screen2canvas = canvas.parentNode.getScreenCTM().inverse();
+        const canvasBBox = canvas.parentNode.getBBox();
+        
+        // Applies in reverse order...
+        const convertCoords = new DOMMatrix()
+            .translate(-1, -1)
+            .scale(2/canvasBBox.width, 2/canvasBBox.height)
+            .translate(-canvasBBox.x, -canvasBBox.y)
+            .multiply(screen2canvas)
+            .multiply(area2screen);
+
+
+        this.polygon.v = this.polygon.v.map((v) => {
+            const p = convertCoords.transformPoint(new DOMPoint(v.x, v.y));
+            const new_v = new Vector(p.x, p.y);
+            console.log(v, p, new_v);
+            return new_v
+        })
+        
+        this.mesh = createMesh(polygon_copy);
+        this.geometry = new Geometry(this.mesh, polygon_copy.v);
         this.heatMethod = new HeatMethod(this.geometry);
 
         const V = this.mesh.vertices.length;
