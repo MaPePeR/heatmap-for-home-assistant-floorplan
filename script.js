@@ -199,9 +199,9 @@ class Area {
         const buffer = new ArrayBuffer(16/8 + this.polygon.v.length * 2 * 16/8 + this.polygon.f.length * 16 / 8)
         const view = new DataView(buffer)
         let pos = 0;
-        view.setUint16(pos, this.polygon.v.length / 2)
+        view.setUint16(pos, this.polygon.v.length)
         pos += 16/8;
-        const v_buffer = new Float16Array(buffer, pos, this.polygon.v.length)
+        const v_buffer = new Float16Array(buffer, pos, this.polygon.v.length * 2)
         pos += this.polygon.v.length * 2 * 16 / 8;
         const f_buffer = new Uint16Array(buffer, pos, this.polygon.f.length);
         for(let i = 0; i < this.polygon.v.length; i += 1) {
