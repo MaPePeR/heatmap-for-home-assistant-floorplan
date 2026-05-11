@@ -65,6 +65,8 @@ function generateDistances() {
     } catch (e) {
         errorcontainer.innerText += ""+e
         throw e
+    } finally {
+        memoryManager.deleteExcept([])
     }
 }
 
