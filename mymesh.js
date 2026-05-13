@@ -53,10 +53,16 @@ class MyMesh extends Mesh {
         const new_halfedge_next_twin = new Halfedge();
         new_halfedge_next_twin.debug = "new_halfedge_next_twin";
         
+        new_face.halfedge = new_halfedge_s;
+        new_face_twin.halfedge = new_halfedge_twin;
+
         const new_halfedge_opposite = new Halfedge();
         new_halfedge_opposite.debug = "new_halfedge_opposite";
         const new_halfedge_opposite_twin = new Halfedge();
         new_halfedge_opposite_twin.debug = "new_halfedge_opposite_twin";
+        new_edge_s.halfedge = new_halfedge_s;
+        new_edge_next.halfedge = new_halfedge_next;
+        new_edge_opposite.halfedge = new_halfedge_opposite;
 
 
         this.halfedges.push(new_halfedge_s)
