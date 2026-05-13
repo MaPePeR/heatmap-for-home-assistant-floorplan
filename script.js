@@ -60,6 +60,7 @@ function generateDistances() {
                 tex: area_data.getTextureData(),
                 sensors: {},
             };
+            area_data.splitMeshForSensorDistances(sensors[0])
             results[area.id] = result
         }
         console.log(results)
@@ -123,7 +124,7 @@ function getPolygon(area) {
 }
 
 function createMesh(polygon) {
-    const mesh = new Mesh()
+    const mesh = new MyMesh()
     console.log("Building mesh")
     if (!mesh.build(polygon)) {
         throw new Error("Failed to build mesh")
@@ -194,7 +195,7 @@ class Area {
         const canvasBBox = canvas.parentNode.getBBox();
         
         // Applies in reverse order...
-        const convertCoords = new DOMMatrix()
+        this.convertCoords = new DOMMatrix()
             .flipY()
             .translate(-1, -1)
             .scale(2/canvasBBox.width, 2/canvasBBox.height)
@@ -204,18 +205,105 @@ class Area {
 
 
         this.polygon.v = this.polygon.v.map((v) => {
-            const p = convertCoords.transformPoint(new DOMPoint(v.x, v.y));
+            const p = this.convertCoords.transformPoint(new DOMPoint(v.x, v.y));
             const new_v = new Vector(p.x, p.y);
             console.log(v, p, new_v);
             return new_v
         })
         
-        this.mesh = createMesh(polygon_copy);
-        this.geometry = new Geometry(this.mesh, polygon_copy.v);
-        this.heatMethod = new HeatMethod(this.geometry);
+        this.mesh = createMesh(this.polygon);
+        this.geometry = new MyGeometry(this.mesh, this.polygon.v, false);
+    }
 
-        const V = this.mesh.vertices.length;
-        this.delta = DenseMatrix.zeros(V, 1);
+    findFace(point) {
+        for (const face of this.mesh.faces) {
+            if (vertexInTriangle(
+                point,
+                this.geometry.positions[face.halfedge.vertex.index],
+                this.geometry.positions[face.halfedge.next.vertex.index],
+                this.geometry.positions[face.halfedge.prev.vertex.index],
+            )) {
+                return face;
+            }
+        }
+        return null;
+    }
+
+    splitMeshForSensorDistances(sensor) {
+        const point = this.convertCoords.transformPoint(getCenterOfElement(sensor));
+        const sensorFace = this.findFace(point)
+        if (!sensorFace) {
+            throw new Error("Couldn't find sensor face");
+        }
+
+        sensorFace.distancePoint = point;
+        sensorFace.distance = 0;
+
+        const todos = [{
+            halfedge: sensorFace.halfedge,
+            point: point,
+            distance: 0,
+            minVector: this.geometry.positions[sensorFace.halfedge.vertex.index].minus(point),
+            maxCosAngle: -2, // arrcos(3) > 2PI / 360 degrees
+        }];
+
+        
+        let todo;
+        let completeFaceTodos = [];
+        let partialTodos = [];
+        while (completeFaceTodos.length || todos.length) {
+            while (todo = completeFaceTodos.shift()) {
+                todo.halfedge.face.distancePoint = todo.point;
+                todo.halfedge.face.distance = todo.distance;
+                for (const halfedge of todo.halfedge.face.adjacentHalfedges()) {
+                    if (halfedge.twin.onBoundary) continue;
+                    if (halfedge.twin.face.distancePoint) continue;
+                    const minVector = this.geometry.positions[halfedge.vertex.index].minus(todo.point)
+                    minVector.normalize();
+                    const maxVector = this.geometry.positions[halfedge.next.vertex.index].minus(todo.point)
+                    maxVector.normalize();
+                    const maxCosAngle = minVector.dot(maxVector);
+                    todos.push({
+                        halfedge: halfedge.twin,
+                        point: todo.point,
+                        distance: todo.distance,
+                        minVector: minVector,
+                        maxCosAngle: maxCosAngle,
+                    })
+                }
+            }
+
+            while(todo = todos.shift()) {
+                const v1 = this.geometry.positions[todo.halfedge.vertex.index];
+                const v2 = this.geometry.positions[todo.halfedge.next.vertex.index];
+                const v3 = this.geometry.positions[todo.halfedge.prev.vertex.index];
+                if (todo.minVector.dot(v1.minus(todo.point).unit()) >= todo.maxCosAngle
+                    && todo.minVector.dot(v2.minus(todo.point).unit()) >= todo.maxCosAngle
+                    && todo.minVector.dot(v3.minus(todo.point).unit()) >= todo.maxCosAngle
+                ) {
+                    completeFaceTodos.push(todo);
+                } else {
+                    partialTodos.push(todo);
+                }
+            }
+            let unsolvedPartials = [];
+            while(todo = partialTodos.shift()) {
+                for (const halfedge of todo.halfedge.face.adjacentHalfedges()) {
+                    if (halfedge.twin.face.distancePoint === todo.point
+                        && halfedge.prev.twin.face.distancePoint === todo.point) {
+                            const v = this.geometry.positions[halfedge.vertex.index];
+                            if (todo.minVector.dot(v.minus(todo.point).unit()) < todo.maxCosAngle) {
+                                // Point is in viewcone and both adjacent faces are viewable.
+                                completeFaceTodos.push(todo)
+                                continue;
+                            }
+                        }
+                }
+                unsolvedPartials.push(todo);
+            }
+            partialTodos = unsolvedPartials;
+        }
+        console.log("Unsolved:", partialTodos);
     }
 
     getTextureData() {
