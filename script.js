@@ -56,11 +56,12 @@ function generateDistances() {
     try {
         for (const area of areas) {
             const area_data = new Area(area, sensors, canvas)
+            area_data.splitMeshForSensorDistances(sensors[0])
             const result = {
                 tex: area_data.getTextureData(),
+                sensor: area_data.getSensorData(),
                 sensors: {},
             };
-            area_data.splitMeshForSensorDistances(sensors[0])
             results[area.id] = result
         }
         console.log(results)
@@ -237,7 +238,7 @@ class Area {
         }
 
         sensorFace.distancePoint = point;
-        sensorFace.distance = 0;
+        sensorFace.distanceSum = 0;
 
         const todos = [{
             halfedge: sensorFace.halfedge,
@@ -254,7 +255,7 @@ class Area {
         while (completeFaceTodos.length || todos.length) {
             while (todo = completeFaceTodos.shift()) {
                 todo.halfedge.face.distancePoint = todo.point;
-                todo.halfedge.face.distance = todo.distance;
+                todo.halfedge.face.distanceSum = todo.distance;
                 for (const halfedge of todo.halfedge.face.adjacentHalfedges()) {
                     if (halfedge.twin.onBoundary) continue;
                     if (halfedge.twin.face.distancePoint) continue;
@@ -307,23 +308,46 @@ class Area {
     }
 
     getTextureData() {
-        const buffer = new ArrayBuffer(16/8 + this.polygon.v.length * 2 * 16/8 + this.polygon.f.length * 16 / 8)
+        const buffer = new ArrayBuffer(16/8 + this.mesh.vertices.length * 2 * 16/8 + this.mesh.faces.length * 3 * 16 / 8)
         const view = new DataView(buffer)
         let pos = 0;
-        view.setUint16(pos, this.polygon.v.length)
+        view.setUint16(pos, this.mesh.vertices.length)
         pos += 16/8;
-        const v_buffer = new Float16Array(buffer, pos, this.polygon.v.length * 2)
-        pos += this.polygon.v.length * 2 * 16 / 8;
-        const f_buffer = new Uint16Array(buffer, pos, this.polygon.f.length);
-        for(let i = 0; i < this.polygon.v.length; i += 1) {
-            const v = this.polygon.v[i];
+        const v_buffer = new Float16Array(buffer, pos, this.mesh.vertices.length * 2)
+        pos += this.mesh.vertices.length * 2 * 16 / 8;
+        for(let i = 0; i < this.mesh.vertices.length; i += 1) {
+            const v = this.geometry.positions[this.mesh.vertices[i].index];
             v_buffer[i * 2+0] = v.x;
             v_buffer[i * 2+1] = v.y;
         }
-        for(let i = 0; i < this.polygon.f.length; i++) {
-            f_buffer[i] = this.polygon.f[i];
+
+        const f_buffer = new Uint16Array(buffer, pos, this.mesh.faces.length * 3);
+        console.log(f_buffer)
+        for(let i = 0; i < this.mesh.faces.length; i++) {
+            const face = this.mesh.faces[i];
+            f_buffer[i*3 + 0] = face.halfedge.vertex.index;
+            f_buffer[i*3 + 1] = face.halfedge.next.vertex.index;
+            f_buffer[i*3 + 2] = face.halfedge.next.next.vertex.index;
         }
 
         return (new Uint8Array(buffer)).toBase64();
+    }
+
+    getSensorData() {
+        const data = new Float32Array(this.mesh.faces.length * 3);
+        for (let i = 0; i < this.mesh.faces.length; i++) {
+            const face = this.mesh.faces[i];
+            if (face.distancePoint) {
+                data[i * 3 + 0] = face.distancePoint.x;
+                data[i * 3 + 1] = face.distancePoint.y;
+                data[i * 3 + 2] = face.distanceSum;
+            } else {
+                data[i * 3 + 0] = 0;
+                data[i * 3 + 1] = 0;
+                data[i * 3 + 2] = -1;
+            }
+        }
+        console.log("sensordata", data);
+        return (new Uint8Array(data.buffer)).toBase64();
     }
 }

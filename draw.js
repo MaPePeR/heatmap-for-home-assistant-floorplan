@@ -4,7 +4,10 @@
 const SPACE_TRANSFORM_VERTEX_SHADER = `#version 300 es
 
 in vec2 a_position;
+in vec3 a_distance;
+out vec3 v_distance;
 out vec2 v_barycentric;
+out vec2 v_pos;
 
 const vec2[3] barycentrics = vec2[3](
     vec2(0.0, 0.0),
@@ -15,6 +18,8 @@ const vec2[3] barycentrics = vec2[3](
 
 void main() {
     gl_Position = vec4(a_position, 0, 1);
+    v_pos = a_position;
+    v_distance = a_distance;
     v_barycentric = barycentrics[gl_VertexID % 3];
 }
 `;
@@ -23,6 +28,8 @@ const BASIC_FRAGMENT_SHADER = `#version 300 es
 
 precision highp float;
 in vec2 v_barycentric;
+in vec3 v_distance;
+in vec2 v_pos;
 out vec4 outColor;
 
 void main() {
@@ -34,8 +41,14 @@ void main() {
     if (edgeDist < 0.01) {
         outColor = vec4(0,0,0,1);
     } else {
-        outColor = vec4(0,0,0,0);
-        //outColor = vec4(bary.xzy,1);
+        if (v_distance.z >= 0.0) {
+            float l =0.5 * length(v_pos - v_distance.xy) ;
+            outColor = vec4(1, 0.25 + l, 0.25 + l , 1);
+            //outColor = vec4(bary.xzy,1);
+        } else {
+            outColor = vec4(0,0,0,0);
+        }
+
     }
 }
 `;
@@ -118,6 +131,7 @@ class Renderer {
             const area_data = data[areaId];
             areaId = 'area'
             this.areaTex.set(areaId, readTex(area_data.tex))
+            this.sensorData.set(areaId, readSensorData(area_data.sensor))
         }
         this.ctx = canvas.getContext("webgl2");
         if (!this.ctx) {
@@ -127,14 +141,35 @@ class Renderer {
             this.ctx,
             SPACE_TRANSFORM_VERTEX_SHADER,
             BASIC_FRAGMENT_SHADER,
-            ['a_position'],
+            ['a_position', 'a_distance'],
             [],
         )
 
         this.vertexBuffer = this.ctx.createBuffer();
         this.vertexArray = this.ctx.createVertexArray();
-        
+
         this.ctx.bindVertexArray(this.vertexArray);
+
+        this.distanceBuffer = this.ctx.createBuffer();
+        this.ctx.enableVertexAttribArray(this.renderTexProgram.attributes.get("a_distance"));
+        this.ctx.bindBuffer(this.ctx.ARRAY_BUFFER, this.distanceBuffer);
+        this.ctx.vertexAttribPointer(
+            this.renderTexProgram.attributes.get("a_distance"),
+            3, this.ctx.FLOAT,
+            false, 0, 0
+        );
+        const incoming_data = this.sensorData.get('area');
+       
+        const sensorData = new Float32Array(incoming_data.length * 3);
+        // Have to duplicate Face data for each vertex? Maybe replace with this.ctx.vertexAttribDivisor? Didn't work so far.
+        for(let i = 0; i < incoming_data.length; i+=3) {
+            sensorData[i * 3 + 0] = sensorData[i * 3 + 3] = sensorData[i * 3 + 6] = incoming_data[i + 0];
+            sensorData[i * 3 + 1] = sensorData[i * 3 + 4] = sensorData[i * 3 + 7] = incoming_data[i + 1];
+            sensorData[i * 3 + 2] = sensorData[i * 3 + 5] = sensorData[i * 3 + 8] = incoming_data[i + 2];
+        }
+
+        this.ctx.bufferData(this.ctx.ARRAY_BUFFER, new Float32Array(sensorData), this.ctx.STATIC_DRAW)
+
         this.ctx.enableVertexAttribArray(this.renderTexProgram.attributes.get("a_position"));
         this.ctx.bindBuffer(this.ctx.ARRAY_BUFFER, this.vertexBuffer);
         this.ctx.vertexAttribPointer(
