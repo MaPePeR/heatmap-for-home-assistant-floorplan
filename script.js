@@ -60,10 +60,6 @@ function generateDistances() {
                 tex: area_data.getTextureData(),
                 sensors: {},
             };
-            for (const sensor of sensors) {
-                console.log("Calculating for ", sensor)
-                result.sensors[sensor.id] = area_data.calculateForSensor(sensor)
-            }
             results[area.id] = result
         }
         console.log(results)
@@ -190,14 +186,6 @@ class Area {
         this.polygon = getPolygon(area);
         this.sensorsToVertexId = new Map();
 
-        
-
-        for (const sensor of sensors) {
-            const vertex = getCenterOfElement(sensor)
-            const sensorVertexId = insertVertexIntoPolygon(this.polygon, vertex)
-            this.sensorsToVertexId.set(sensor, sensorVertexId)
-        }
-
         const polygon_copy = {v: Array.from(this.polygon.v, (v) => new Vector(v.x, v.y)), f: this.polygon.f}
 
 
@@ -249,25 +237,5 @@ class Area {
         }
 
         return (new Uint8Array(buffer)).toBase64();
-    }
-
-    calculateForSensor(sensor) {
-        const sensorId = this.sensorsToVertexId.get(sensor);
-        this.delta.set(1, sensorId, 0);
-        const result = this.heatMethod.compute(this.delta)
-        this.delta.set(0, sensorId, 0);
-
-        if (result.nRows() != this.polygon.v.length) {
-            throw new Error(`HeatMethod result has wrong dimension. Expected ${this.polygon.v.length}x1. Got ${result.nRows()}x${result.nCols()}`)
-        }
-
-        const data = new Float32Array(this.polygon.v.length);
-        for (let i = 0; i < this.polygon.v.length; i++) {
-            data[i] = result.get(i, 0);
-        }
-
-        memoryManager.deleteExcept([this.delta, this.heatMethod.A, this.heatMethod.F]);
-
-        return (new Uint8Array(data.buffer)).toBase64();
     }
 }

@@ -4,22 +4,39 @@
 const SPACE_TRANSFORM_VERTEX_SHADER = `#version 300 es
 
 in vec2 a_position;
-in float a_distance;
-out float v_distance;
+out vec2 v_barycentric;
+
+const vec2[3] barycentrics = vec2[3](
+    vec2(0.0, 0.0),
+    vec2(1.0, 0.0),
+    vec2(0.0, 1.0)
+);
+
+
 void main() {
     gl_Position = vec4(a_position, 0, 1);
-    v_distance = a_distance;
+    v_barycentric = barycentrics[gl_VertexID % 3];
 }
 `;
 
 const BASIC_FRAGMENT_SHADER = `#version 300 es
 
 precision highp float;
-in float v_distance;
+in vec2 v_barycentric;
 out vec4 outColor;
 
 void main() {
-  outColor = vec4(v_distance, v_distance, 0, 1);
+    // Calculate distance to edges
+    vec3 bary = vec3(v_barycentric.xy, 1.0 - v_barycentric.x - v_barycentric.y);
+    
+    // Find minimum distance to any edge
+    float edgeDist = min(min(bary.x, bary.y), bary.z);
+    if (edgeDist < 0.01) {
+        outColor = vec4(0,0,0,1);
+    } else {
+        outColor = vec4(0,0,0,0);
+        //outColor = vec4(bary.xzy,1);
+    }
 }
 `;
 
@@ -101,12 +118,6 @@ class Renderer {
             const area_data = data[areaId];
             areaId = 'area'
             this.areaTex.set(areaId, readTex(area_data.tex))
-            for(const sensorId in area_data.sensors) {
-                if (!Object.hasOwnProperty.call(area_data.sensors, sensorId)) {
-                    continue;
-                }
-                this.sensorData.set(sensorId, readSensorData(area_data.sensors[sensorId]))
-            }
         }
         this.ctx = canvas.getContext("webgl2");
         if (!this.ctx) {
@@ -116,7 +127,7 @@ class Renderer {
             this.ctx,
             SPACE_TRANSFORM_VERTEX_SHADER,
             BASIC_FRAGMENT_SHADER,
-            ['a_position', 'a_distance'],
+            ['a_position'],
             [],
         )
 
@@ -131,21 +142,14 @@ class Renderer {
             2, this.ctx.FLOAT,
             false, 0, 0
         )
-        this.ctx.bufferData(this.ctx.ARRAY_BUFFER, new Float32Array(this.areaTex.get('area').v), this.ctx.STATIC_DRAW)
-
-        this.triangleBuffer = this.ctx.createBuffer();
-        this.ctx.bindBuffer(this.ctx.ELEMENT_ARRAY_BUFFER, this.triangleBuffer);
-        this.ctx.bufferData(this.ctx.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.areaTex.get('area').f), this.ctx.STATIC_DRAW)
-
-        this.distanceBuffer = this.ctx.createBuffer();
-        this.ctx.enableVertexAttribArray(this.renderTexProgram.attributes.get("a_distance"));
-        this.ctx.bindBuffer(this.ctx.ARRAY_BUFFER, this.distanceBuffer);
-        this.ctx.vertexAttribPointer(
-            this.renderTexProgram.attributes.get("a_distance"),
-            1, this.ctx.FLOAT,
-            false, 0, 0
-        )
-        this.ctx.bufferData(this.ctx.ARRAY_BUFFER, new Float32Array(this.sensorData.get("examplesensor")), this.ctx.STATIC_DRAW)
+        const v = this.areaTex.get('area').v;
+        const f=  this.areaTex.get('area').f;
+        this.positions = new Float32Array(f.length * 2);
+        for (let i = 0; i < f.length; i++) {
+            this.positions[i*2+0] = v[f[i] * 2 + 0];
+            this.positions[i*2+1] = v[f[i] * 2 + 1];
+        }
+        this.ctx.bufferData(this.ctx.ARRAY_BUFFER, new Float32Array(this.positions), this.ctx.STATIC_DRAW)
 
         this.render()
     }
@@ -166,7 +170,7 @@ class Renderer {
 
             ctx.bindVertexArray(this.vertexArray);
 
-            ctx.drawElements(ctx.TRIANGLES, this.areaTex.get('area').f.length, ctx.UNSIGNED_SHORT, 0);
+            ctx.drawArrays(ctx.TRIANGLES, 0, this.positions.length / 2);
         })
     }
 }
