@@ -18,7 +18,7 @@ class MyGeometry extends Geometry {
 class MyMesh extends Mesh {
     
     splitHalfEdge(halfedge) {
-        if (halfedge.onBoundary || halfedge.twin.onBoundary) {
+        if (halfedge.onBoundary) {
             throw new Error("Cannot split boundary edge");
         }
         const new_vertex = new Vertex();
@@ -27,21 +27,17 @@ class MyMesh extends Mesh {
 
         const new_face = new Face();
         new_face.debug = "new_face";
-        const new_face_twin = new Face();
-        new_face_twin.debug = "new_face_twin";
 
-        this.faces.push(new_face, new_face_twin);
-        new_face.index = this.faces.length - 2;
-        new_face_twin.index = this.faces.length - 1;
+        this.faces.push(new_face);
+        new_face.index = this.faces.length - 1
+
 
         const new_edge_s = new Edge();
         const new_edge_next = new Edge();
-        const new_edge_opposite = new Edge();
 
-        this.edges.push(new_edge_s, new_edge_next, new_edge_opposite);
-        new_edge_s.index = this.edges.length - 3;
-        new_edge_next.index = this.edges.length - 2;
-        new_edge_opposite.index = this.edges.length - 1;
+        this.edges.push(new_edge_s, new_edge_next);
+        new_edge_s.index = this.edges.length - 2;
+        new_edge_next.index = this.edges.length - 1;
 
         const new_halfedge_s = new Halfedge();
         new_halfedge_s.debug = "new_halfedge_s";
@@ -54,15 +50,9 @@ class MyMesh extends Mesh {
         new_halfedge_next_twin.debug = "new_halfedge_next_twin";
         
         new_face.halfedge = new_halfedge_s;
-        new_face_twin.halfedge = new_halfedge_twin;
 
-        const new_halfedge_opposite = new Halfedge();
-        new_halfedge_opposite.debug = "new_halfedge_opposite";
-        const new_halfedge_opposite_twin = new Halfedge();
-        new_halfedge_opposite_twin.debug = "new_halfedge_opposite_twin";
         new_edge_s.halfedge = new_halfedge_s;
         new_edge_next.halfedge = new_halfedge_next;
-        new_edge_opposite.halfedge = new_halfedge_opposite;
 
 
         this.halfedges.push(new_halfedge_s)
@@ -80,12 +70,16 @@ class MyMesh extends Mesh {
         new_halfedge_twin.index = this.halfedges.length - 1;
         new_halfedge_twin.vertex = new_vertex;
         new_halfedge_twin.edge = halfedge.edge;
-        new_halfedge_twin.face = new_face_twin;
+        if (halfedge.twin.onBoundary) {
+            new_halfedge_twin.face = halfedge.twin.face;
+        }
         //new_halfedge_twin.corner
         new_halfedge_twin.next = halfedge.twin.next;
-        new_halfedge_twin.prev = new_halfedge_opposite_twin;
+        if (halfedge.twin.onBoundary) {
+            new_halfedge_twin.prev = halfedge.twin;
+        }
         new_halfedge_twin.twin = halfedge;
-        new_halfedge_twin.onBoundary = false;
+        new_halfedge_twin.onBoundary = halfedge.twin.onBoundary;
 
         this.halfedges.push(new_halfedge_next)
         new_halfedge_next.index = this.halfedges.length - 1;
@@ -109,72 +103,105 @@ class MyMesh extends Mesh {
         new_halfedge_next_twin.prev = halfedge.next;
         new_halfedge_next_twin.twin = new_halfedge_next;
         new_halfedge_next_twin.onBoundary = false;
-        
-
-        this.halfedges.push(new_halfedge_opposite)
-        new_halfedge_opposite.index = this.halfedges.length - 1;
-        new_halfedge_opposite.vertex = new_vertex;
-        new_halfedge_opposite.edge = new_edge_opposite;
-        new_halfedge_opposite.face = halfedge.twin.face;
-        //new_halfedge_opposite.corner
-        new_halfedge_opposite.next = halfedge.twin.prev;
-        new_halfedge_opposite.prev = halfedge.twin;
-        new_halfedge_opposite.twin = new_halfedge_opposite_twin;
-        new_halfedge_opposite.onBoundary = false;
-
-        this.halfedges.push(new_halfedge_opposite_twin)
-        new_halfedge_opposite_twin.index = this.halfedges.length - 1;
-        new_halfedge_opposite_twin.vertex = halfedge.twin.prev.vertex
-        new_halfedge_opposite_twin.edge = new_edge_opposite;
-        new_halfedge_opposite_twin.face = new_face_twin;
-        //new_halfedge_opposite_twin.corner
-        new_halfedge_opposite_twin.next = new_halfedge_twin;
-        new_halfedge_opposite_twin.prev = halfedge.twin.next;
-        new_halfedge_opposite_twin.twin = new_halfedge_opposite;
-        new_halfedge_opposite_twin.onBoundary = false;
 
         halfedge.twin.edge = new_edge_s;
 
         halfedge.next.face = new_face;
-        halfedge.twin.next.face = new_face_twin;
 
-        // Don't use prev after here
+        if (!halfedge.twin.onBoundary) {
+            const new_face_twin = new Face();
+            new_face_twin.debug = "new_face_twin";
 
-        halfedge.next.prev = new_halfedge_s;
-        halfedge.prev.prev = new_halfedge_next;
+            this.faces.push(new_face_twin);
+            new_face_twin.index = this.faces.length - 1;
 
-        halfedge.twin.next.prev = new_halfedge_twin;
-        halfedge.twin.prev.prev = new_halfedge_opposite;
+            const new_edge_opposite = new Edge();
+            this.edges.push(new_edge_opposite);
+            new_edge_opposite.index = this.edges.length - 1;
 
-        // Dont use next after here
+            const new_halfedge_opposite = new Halfedge();
+            new_halfedge_opposite.debug = "new_halfedge_opposite";
+            const new_halfedge_opposite_twin = new Halfedge();
+            new_halfedge_opposite_twin.debug = "new_halfedge_opposite_twin";
 
-        halfedge.twin.next.next = new_halfedge_opposite_twin;
-        halfedge.next.next = new_halfedge_next_twin;
+            new_face_twin.halfedge = new_halfedge_twin;
 
-        halfedge.twin.next = new_halfedge_opposite;
-        halfedge.next = new_halfedge_next;
+            new_edge_opposite.halfedge = new_halfedge_opposite;
+
+            new_halfedge_twin.face = new_face_twin;
+            new_halfedge_twin.prev = new_halfedge_opposite_twin;
+
+            this.halfedges.push(new_halfedge_opposite)
+            new_halfedge_opposite.index = this.halfedges.length - 1;
+            new_halfedge_opposite.vertex = new_vertex;
+            new_halfedge_opposite.edge = new_edge_opposite;
+            new_halfedge_opposite.face = halfedge.twin.face;
+            //new_halfedge_opposite.corner
+            new_halfedge_opposite.next = halfedge.twin.prev;
+            new_halfedge_opposite.prev = halfedge.twin;
+            new_halfedge_opposite.twin = new_halfedge_opposite_twin;
+            new_halfedge_opposite.onBoundary = false;
+
+            this.halfedges.push(new_halfedge_opposite_twin)
+            new_halfedge_opposite_twin.index = this.halfedges.length - 1;
+            new_halfedge_opposite_twin.vertex = halfedge.twin.prev.vertex
+            new_halfedge_opposite_twin.edge = new_edge_opposite;
+            new_halfedge_opposite_twin.face = new_face_twin;
+            //new_halfedge_opposite_twin.corner
+            new_halfedge_opposite_twin.next = new_halfedge_twin;
+            new_halfedge_opposite_twin.prev = halfedge.twin.next;
+            new_halfedge_opposite_twin.twin = new_halfedge_opposite;
+            new_halfedge_opposite_twin.onBoundary = false;
+
+            halfedge.twin.next.face = new_face_twin;
+
+            // Don't use prev after here
+
+            halfedge.next.prev = new_halfedge_s;
+            halfedge.prev.prev = new_halfedge_next;
+
+            halfedge.twin.next.prev = new_halfedge_twin;
+            halfedge.twin.prev.prev = new_halfedge_opposite;
+
+            // Dont use next after here
+
+            halfedge.twin.next.next = new_halfedge_opposite_twin;
+            halfedge.next.next = new_halfedge_next_twin;
+
+            halfedge.twin.next = new_halfedge_opposite;
+            halfedge.next = new_halfedge_next;
+        } else {
+            // Don't use prev after here
+
+            halfedge.next.prev = new_halfedge_s;
+            halfedge.prev.prev = new_halfedge_next;
+
+            halfedge.twin.next.prev = new_halfedge_twin;
+            halfedge.twin.next = new_halfedge_twin;
+
+            // Dont use next after here
+
+            halfedge.next.next = new_halfedge_next_twin;
+
+            halfedge.next = new_halfedge_next;
+        }
 
         halfedge.twin.twin = new_halfedge_s;
         halfedge.twin = new_halfedge_twin;
-
-        
     }
     
     check() {
         for (const halfedge of this.halfedges) {
-            if (halfedge.onBoundary) {
-                continue;
-            }
             if (halfedge.next.prev !== halfedge) {
                 console.log(".next.prev !== this", halfedge);
             }
             if (halfedge.prev.next !== halfedge) {
                 console.log(".prev.next !== this", halfedge);
             }
-            if (halfedge.next.next.next !== halfedge) {
+            if (!halfedge.onBoundary && halfedge.next.next.next !== halfedge) {
                 console.log(".next.next.next !== this", halfedge);
             }
-            if (halfedge.prev.prev.prev !== halfedge) {
+            if (!halfedge.onBoundary && halfedge.prev.prev.prev !== halfedge) {
                 console.log(".prev.prev.prev !== this", halfedge);
             }
             if (halfedge.twin.twin !== halfedge) {
@@ -195,7 +222,7 @@ class MyMesh extends Mesh {
             if (this.vertices[halfedge.vertex.index] !== halfedge.vertex) {
                 console.log("Vertice not found at index", halfedge);
             }
-            if (this.faces[halfedge.face.index] !== halfedge.face) {
+            if (!halfedge.onBoundary && this.faces[halfedge.face.index] !== halfedge.face) {
                 console.log("Face not found at index", halfedge);
             }
             if (this.edges[halfedge.edge.index] !== halfedge.edge) {
