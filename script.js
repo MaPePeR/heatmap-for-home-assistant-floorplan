@@ -207,6 +207,7 @@ class Area {
         
         // Applies in reverse order...
         const convertCoords = new DOMMatrix()
+            .flipY()
             .translate(-1, -1)
             .scale(2/canvasBBox.width, 2/canvasBBox.height)
             .translate(-canvasBBox.x, -canvasBBox.y)
