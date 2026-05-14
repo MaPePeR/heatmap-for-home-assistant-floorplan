@@ -26,6 +26,33 @@ class MyGeometry extends Geometry {
         const det = v1.x*v2.y - v1.y*v2.x;
         return Math.atan2(-det, -dot) + Math.PI;
     }
+
+    smallestAngleBetweenVectors(v1, v2) {
+        v1 = v1.unit();
+        v2 = v2.unit();
+        // https://stackoverflow.com/a/16544330
+        const dot = v1.x*v2.x + v1.y*v2.y;
+        const det = v1.x*v2.y - v1.y*v2.x;
+        return Math.atan2(det, dot)
+    }
+
+    check() {
+        this.mesh.check();
+        let cwCount = 0;
+        let ccwCount = 0;
+        for (const halfedge of this.mesh.halfedges) {
+            if (halfedge.onBoundary) continue;
+            const c = this.centroid(halfedge.face);
+            const angle = this.smallestAngleBetweenVectors(this.positionVector(halfedge.vertex).minus(c), this.positionVector(halfedge.next.vertex).minus(c))
+            if (angle < 0) {
+                console.log("halfedge next is clockwise instead of counterclockwise", halfedge)
+                cwCount += 1
+            } else {
+                ccwCount +=1;
+            }
+        }
+        console.log("CCW:", ccwCount, "CW:", cwCount)
+    }
 }
 
 class MyMesh extends Mesh {

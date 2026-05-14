@@ -76,37 +76,27 @@ function generateDistances() {
 }
 
 
-function getPolygon(area) {
+function getPolygon(area, convertCoords) {
     const pathdata = area.getPathData({"normalize": true})
-    const svg2screen = area.getScreenCTM();
+    console.log("Pathdata", pathdata.map((p) => `${p.type} ${p.values}`).join(" "))
     if (pathdata[0].type != "M") {
         throw new Error("First Area Path Command is not Move");
     }
-    let x = pathdata[0].values[0]
-    let y = pathdata[0].values[1]
+    let p = convertCoords.transformPoint(new DOMPoint(pathdata[0].values[0], pathdata[0].values[1]))
     const vertices_geometry = [
-        new Vector(
-            x,
-            y,
-        )
+        new Vector(p.x, p.y),
     ]
     const vertices_earcut = [
-        x,
-        y,
+        p.x,
+        p.y,
     ];
     for (let i = 1; i < pathdata.length - 1; i++) {
         const segment = pathdata[i];
-        x = segment.values[0];
-        y = segment.values[1];
+        p = convertCoords.transformPoint(new DOMPoint(segment.values[0], segment.values[1]))
         if (segment.type == "L") {
-            vertices_earcut.push(x)
-            vertices_earcut.push(y)
-            vertices_geometry.push(
-                new Vector(
-                    x,
-                    y,
-                )
-            )
+            vertices_earcut.push(p.x)
+            vertices_earcut.push(p.y)
+            vertices_geometry.push(new Vector(p.x, p.y))
         } else {
             throw new Error(`Found unexpected path command ${segment.type} at index ${i}`)
         }
@@ -185,10 +175,6 @@ function insertVertexIntoPolygon(polygon, v) {
 
 class Area {
     constructor(area, sensors, canvas) {
-        this.polygon = getPolygon(area);
-        this.sensorsToVertexId = new Map();
-
-        const polygon_copy = {v: Array.from(this.polygon.v, (v) => new Vector(v.x, v.y)), f: this.polygon.f}
 
 
         const area2screen = area.getScreenCTM();
@@ -205,12 +191,7 @@ class Area {
             .multiply(area2screen);
 
 
-        this.polygon.v = this.polygon.v.map((v) => {
-            const p = this.convertCoords.transformPoint(new DOMPoint(v.x, v.y));
-            const new_v = new Vector(p.x, p.y);
-            console.log(v, p, new_v);
-            return new_v
-        })
+        this.polygon = getPolygon(area, this.convertCoords);
         
         this.mesh = createMesh(this.polygon);
         this.geometry = new MyGeometry(this.mesh, this.polygon.v, false);
