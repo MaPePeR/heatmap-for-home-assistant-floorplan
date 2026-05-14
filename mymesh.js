@@ -7,9 +7,9 @@ class MyGeometry extends Geometry {
             throw new Error("Ratio has to be between 0 and 1");
         }
 
-        const pos1 = halfedge.vertex;
-        const pos2 = halfedge.next.vertex;
-        const new_pos = pos1.plus(pos2.minus(pos1).multiply(ratio))
+        const pos1 = this.positionVector(halfedge.vertex);
+        const pos2 = this.positionVector(halfedge.next.vertex);
+        const new_pos = pos1.plus(pos2.minus(pos1).times(ratio))
         this.mesh.splitHalfEdge(halfedge);
         this.positions[halfedge.next.vertex.index] = new_pos;
     }
@@ -34,6 +34,24 @@ class MyGeometry extends Geometry {
         const dot = v1.x*v2.x + v1.y*v2.y;
         const det = v1.x*v2.y - v1.y*v2.x;
         return Math.atan2(det, dot)
+    }
+
+    printFace(f) {
+        const points = [];
+        const edges = [];
+        for (const halfedge of f.adjacentHalfedges()) {
+            const p = this.positionVector(halfedge.vertex);
+            points.push(`(${p.x}, ${p.y})`)
+            const p2 = this.positionVector(halfedge.next.vertex)
+            edges.push(`Vector((${p.x}, ${p.y}), (${p2.x}, ${p2.y}))`)
+        }
+        return `{Polygon(${points.join(", ")}),${edges.join(",")}}`
+    }
+
+    printHalfedge(halfedge) {
+        const p1 = this.positionVector(halfedge.vertex);
+        const p2 = this.positionVector(halfedge.next.vertex);
+        return `Vector((${p1.x}, ${p1.y}), (${p2.x}, ${p2.y}))`
     }
 
     check() {

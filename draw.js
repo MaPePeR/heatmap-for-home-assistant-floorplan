@@ -42,7 +42,7 @@ void main() {
         outColor = vec4(0,0,0,1);
     } else {
         if (v_distance.z >= 0.0) {
-            float l =0.5 * length(v_pos - v_distance.xy) ;
+            float l =0.5 * (length(v_pos - v_distance.xy) + v_distance.z);
             outColor = vec4(1, 0.25 + l, 0.25 + l , 1);
             //outColor = vec4(bary.xzy,1);
         } else {

@@ -218,75 +218,146 @@ class Area {
             throw new Error("Couldn't find sensor face");
         }
 
-        sensorFace.distancePoint = point;
-        sensorFace.distanceSum = 0;
-
-        const todos = [{
-            halfedge: sensorFace.halfedge,
-            point: point,
-            distance: 0,
-            minVector: this.geometry.positionVector(sensorFace.halfedge.vertex).minus(point),
-            maxAngle: 2*Math.PI, // 2PI / 360 degrees
-        }];
-
-        
+        const todos = [];
         let todo;
-        let completeFaceTodos = [];
+        let completeFaceTodos = [
+            {
+                halfedge: sensorFace.halfedge,
+                point: point,
+                distance: 0,
+                minVector: this.geometry.positionVector(sensorFace.halfedge.vertex).minus(point),
+                maxAngle: 2*Math.PI, // 2PI / 360 degrees
+            }
+        ];
         let partialTodos = [];
-        while (completeFaceTodos.length || todos.length) {
-            while (todo = completeFaceTodos.shift()) {
-                todo.halfedge.face.distancePoint = todo.point;
-                todo.halfedge.face.distanceSum = todo.distance;
-                for (const halfedge of todo.halfedge.face.adjacentHalfedges()) {
-                    if (halfedge.twin.onBoundary) continue;
-                    if (halfedge.twin.face.distancePoint) continue;
-                    const minVector = this.geometry.positionVector(halfedge.twin.vertex).minus(todo.point);
-                    const maxVector = this.geometry.positionVector(halfedge.twin.next.vertex).minus(todo.point);
+        let doneSplit = false;
+        while (!doneSplit && (completeFaceTodos.length || todos.length)) {
+            while (completeFaceTodos.length || todos.length) {
+                while (todo = completeFaceTodos.shift()) {
+                    console.log("Complete face", todo.halfedge.face);
+                    console.log(this.geometry.printFace(todo.halfedge.face));
+                    todo.halfedge.face.distancePoint = todo.point;
+                    todo.halfedge.face.distanceSum = todo.distance;
+                    for (const halfedge of todo.halfedge.face.adjacentHalfedges()) {
+                        if (halfedge.twin.onBoundary) continue;
+                        if (halfedge.twin.face.distancePoint) continue;
+                        const minVector = this.geometry.positionVector(halfedge.vertex).minus(todo.point);
+                        const maxVector = this.geometry.positionVector(halfedge.next.vertex).minus(todo.point);
+                        const maxAngle = this.geometry.angleBetweenVectors(minVector, maxVector);
+                        todos.push({
+                            halfedge: halfedge.twin,
+                            point: todo.point,
+                            distance: todo.distance,
+                            minVector: minVector,
+                            maxAngle: maxAngle,
+                        })
+                    }
+                }
+
+                while(todo = todos.shift()) {
+                    if (todo.halfedge.face.distancePoint) continue;
+                    const v1 = this.geometry.positionVector(todo.halfedge.vertex).minus(todo.point);
+                    const v2 = this.geometry.positionVector(todo.halfedge.next.vertex).minus(todo.point);
+                    const v3 = this.geometry.positionVector(todo.halfedge.prev.vertex).minus(todo.point);
+                    const angle_v1 = this.geometry.angleBetweenVectors(todo.minVector, v1);
+                    const angle_v2 = this.geometry.angleBetweenVectors(todo.minVector, v2);
+                    const angle_v3 = this.geometry.angleBetweenVectors(todo.minVector, v3);
+                    if (angle_v1 <= todo.maxAngle
+                        && angle_v2 <= todo.maxAngle
+                        && angle_v3 <= todo.maxAngle
+                    ) {
+                        completeFaceTodos.push(todo);
+                    } else {
+                        partialTodos.push(todo);
+                    }
+                }
+                /*
+                let unsolvedPartials = [];
+                
+                while(todo = partialTodos.shift()) {
+                    for (const halfedge of todo.halfedge.face.adjacentHalfedges()) {
+                        if (halfedge.twin.face.distancePoint === todo.point
+                            && halfedge.prev.twin.face.distancePoint === todo.point) {
+                                const v = this.geometry.positions[halfedge.vertex.index];
+                                if (todo.minVector.dot(v.minus(todo.point).unit()) < todo.maxAngle) {
+                                    // Point is in viewcone and both adjacent faces are viewable.
+                                    completeFaceTodos.push(todo)
+                                    continue;
+                                }
+                            }
+                    }
+                    unsolvedPartials.push(todo);
+                }
+                partialTodos = unsolvedPartials;
+                */
+            }
+            console.log("Unsolved:", partialTodos);
+            while (partialTodos.length) {
+                doneSplit = false;
+                todo = partialTodos.shift();
+                if (!this.geometry.positionVector(todo.halfedge.vertex).isValid()) {
+                    throw new Error("Invalid vector");
+                }
+                const freeVertex = this.geometry.positionVector(todo.halfedge.prev.vertex);
+                let halfedge_to_split;
+                let other_halfedge;
+                let fixedVertex;
+                const angle = this.geometry.smallestAngleBetweenVectors(todo.minVector, freeVertex.minus(todo.point));
+                if (angle < 2 * Math.PI/720) {
+                    console.log("Skip split with very small angle")
+                    completeFaceTodos.push(todo)
+                    continue;
+                }
+
+                if (angle < 0) {
+                    halfedge_to_split = todo.halfedge.prev;
+                    other_halfedge = todo.halfedge.next;
+                    fixedVertex = this.geometry.positionVector(todo.halfedge.next.vertex);
+                } else {
+                    halfedge_to_split = todo.halfedge.next;
+                    other_halfedge = todo.halfedge.prev;
+                    fixedVertex = this.geometry.positionVector(todo.halfedge.vertex);
+                }
+                const p1 = todo.point;
+                const p2 = fixedVertex;
+                const p3 = this.geometry.positionVector(halfedge_to_split.vertex);
+                const p4 = this.geometry.positionVector(halfedge_to_split.next.vertex);
+                let ratio = -((p1.x - p2.x)*(p1.y - p3.y) - (p1.y - p2.y)*(p1.x - p3.x)) / ((p1.x - p2.x)*(p3.y - p4.y) - (p1.y - p2.y)*(p3.x - p4.x))
+                if (ratio <= 0 || ratio >= 1) {
+                    console.log("Skipping halfedge split")
+                    continue;
+                    //throw new Error(`Ratio was not between 0 and 1: ${ratio}`)
+                }
+                this.geometry.splitHalfEdgeAtRatio(halfedge_to_split, ratio);
+                completeFaceTodos.push(todo)
+                if (angle < 0) {
+                    const minVector = this.geometry.vector(other_halfedge);
+                    const maxVector = this.geometry.vector(other_halfedge.prev.twin);
                     const maxAngle = this.geometry.angleBetweenVectors(minVector, maxVector);
-                    todos.push({
-                        halfedge: halfedge.twin,
-                        point: todo.point,
-                        distance: todo.distance,
+                    completeFaceTodos.push({
+                        halfedge: other_halfedge.prev,
+                        point: fixedVertex,
+                        distance: fixedVertex.minus(todo.point).norm2() + todo.distance,
+                        minVector: minVector,
+                        maxAngle: maxAngle,
+                    })
+                } else {
+                    const minVector = this.geometry.vector(other_halfedge.next);
+                    const maxVector = this.geometry.vector(other_halfedge.twin);
+                    const maxAngle = this.geometry.angleBetweenVectors(minVector, maxVector);
+                    completeFaceTodos.push({
+                        halfedge: other_halfedge.next,
+                        point: fixedVertex,
+                        distance: fixedVertex.minus(todo.point).norm2() + todo.distance,
                         minVector: minVector,
                         maxAngle: maxAngle,
                     })
                 }
+                console.log(`{${this.geometry.printFace(completeFaceTodos[completeFaceTodos.length - 2].halfedge.face)},${this.geometry.printFace(completeFaceTodos[completeFaceTodos.length - 1].halfedge.face)}}`)
+                break;
             }
 
-            while(todo = todos.shift()) {
-                const v1 = this.geometry.positionVector(todo.halfedge.vertex).minus(todo.point);
-                const v2 = this.geometry.positionVector(todo.halfedge.next.vertex).minus(todo.point);
-                const v3 = this.geometry.positionVector(todo.halfedge.prev.vertex).minus(todo.point);
-                const angle_v1 = this.geometry.angleBetweenVectors(todo.minVector, v1);
-                const angle_v2 = this.geometry.angleBetweenVectors(todo.minVector, v2);
-                const angle_v3 = this.geometry.angleBetweenVectors(todo.minVector, v3);
-                if (angle_v1 <= todo.maxAngle
-                    && angle_v2 <= todo.maxAngle
-                    && angle_v3 <= todo.maxAngle
-                ) {
-                    completeFaceTodos.push(todo);
-                } else {
-                    partialTodos.push(todo);
-                }
-            }
-            let unsolvedPartials = [];
-            while(todo = partialTodos.shift()) {
-                for (const halfedge of todo.halfedge.face.adjacentHalfedges()) {
-                    if (halfedge.twin.face.distancePoint === todo.point
-                        && halfedge.prev.twin.face.distancePoint === todo.point) {
-                            const v = this.geometry.positions[halfedge.vertex.index];
-                            if (todo.minVector.dot(v.minus(todo.point).unit()) < todo.maxAngle) {
-                                // Point is in viewcone and both adjacent faces are viewable.
-                                completeFaceTodos.push(todo)
-                                continue;
-                            }
-                        }
-                }
-                unsolvedPartials.push(todo);
-            }
-            partialTodos = unsolvedPartials;
         }
-        console.log("Unsolved:", partialTodos);
     }
 
     getTextureData() {
