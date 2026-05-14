@@ -13,6 +13,19 @@ class MyGeometry extends Geometry {
         this.mesh.splitHalfEdge(halfedge);
         this.positions[halfedge.next.vertex.index] = new_pos;
     }
+
+    positionVector(vertex) {
+        return this.positions[vertex.index];
+    }
+
+    angleBetweenVectors(v1, v2) {
+        v1 = v1.unit();
+        v2 = v2.unit();
+        // https://stackoverflow.com/a/16544330
+        const dot = v1.x*v2.x + v1.y*v2.y;
+        const det = v1.x*v2.y - v1.y*v2.x;
+        return Math.atan2(-det, -dot) + Math.PI;
+    }
 }
 
 class MyMesh extends Mesh {

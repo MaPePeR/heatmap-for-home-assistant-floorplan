@@ -244,8 +244,8 @@ class Area {
             halfedge: sensorFace.halfedge,
             point: point,
             distance: 0,
-            minVector: this.geometry.positions[sensorFace.halfedge.vertex.index].minus(point),
-            maxCosAngle: -2, // arrcos(3) > 2PI / 360 degrees
+            minVector: this.geometry.positionVector(sensorFace.halfedge.vertex).minus(point),
+            maxAngle: 2*Math.PI, // 2PI / 360 degrees
         }];
 
         
@@ -259,28 +259,29 @@ class Area {
                 for (const halfedge of todo.halfedge.face.adjacentHalfedges()) {
                     if (halfedge.twin.onBoundary) continue;
                     if (halfedge.twin.face.distancePoint) continue;
-                    const minVector = this.geometry.positions[halfedge.vertex.index].minus(todo.point)
-                    minVector.normalize();
-                    const maxVector = this.geometry.positions[halfedge.next.vertex.index].minus(todo.point)
-                    maxVector.normalize();
-                    const maxCosAngle = minVector.dot(maxVector);
+                    const minVector = this.geometry.positionVector(halfedge.twin.vertex).minus(todo.point);
+                    const maxVector = this.geometry.positionVector(halfedge.twin.next.vertex).minus(todo.point);
+                    const maxAngle = this.geometry.angleBetweenVectors(minVector, maxVector);
                     todos.push({
                         halfedge: halfedge.twin,
                         point: todo.point,
                         distance: todo.distance,
                         minVector: minVector,
-                        maxCosAngle: maxCosAngle,
+                        maxAngle: maxAngle,
                     })
                 }
             }
 
             while(todo = todos.shift()) {
-                const v1 = this.geometry.positions[todo.halfedge.vertex.index];
-                const v2 = this.geometry.positions[todo.halfedge.next.vertex.index];
-                const v3 = this.geometry.positions[todo.halfedge.prev.vertex.index];
-                if (todo.minVector.dot(v1.minus(todo.point).unit()) >= todo.maxCosAngle
-                    && todo.minVector.dot(v2.minus(todo.point).unit()) >= todo.maxCosAngle
-                    && todo.minVector.dot(v3.minus(todo.point).unit()) >= todo.maxCosAngle
+                const v1 = this.geometry.positionVector(todo.halfedge.vertex).minus(todo.point);
+                const v2 = this.geometry.positionVector(todo.halfedge.next.vertex).minus(todo.point);
+                const v3 = this.geometry.positionVector(todo.halfedge.prev.vertex).minus(todo.point);
+                const angle_v1 = this.geometry.angleBetweenVectors(todo.minVector, v1);
+                const angle_v2 = this.geometry.angleBetweenVectors(todo.minVector, v2);
+                const angle_v3 = this.geometry.angleBetweenVectors(todo.minVector, v3);
+                if (angle_v1 <= todo.maxAngle
+                    && angle_v2 <= todo.maxAngle
+                    && angle_v3 <= todo.maxAngle
                 ) {
                     completeFaceTodos.push(todo);
                 } else {
@@ -293,7 +294,7 @@ class Area {
                     if (halfedge.twin.face.distancePoint === todo.point
                         && halfedge.prev.twin.face.distancePoint === todo.point) {
                             const v = this.geometry.positions[halfedge.vertex.index];
-                            if (todo.minVector.dot(v.minus(todo.point).unit()) < todo.maxCosAngle) {
+                            if (todo.minVector.dot(v.minus(todo.point).unit()) < todo.maxAngle) {
                                 // Point is in viewcone and both adjacent faces are viewable.
                                 completeFaceTodos.push(todo)
                                 continue;
