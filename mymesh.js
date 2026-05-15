@@ -56,12 +56,13 @@ class MyGeometry extends Geometry {
         return `Vector((${p1.x}, ${p1.y}), (${p2.x}, ${p2.y}))`
     }
 
-    check() {
-        this.mesh.check();
+    check(triangular=true, face=true) {
+        this.mesh.check(triangular, face);
         let cwCount = 0;
         let ccwCount = 0;
         for (const halfedge of this.mesh.halfedges) {
             if (halfedge.onBoundary) continue;
+            if (!halfedge.face) continue;
             const c = this.centroid(halfedge.face);
             const angle = this.smallestAngleBetweenVectors(this.positionVector(halfedge.vertex).minus(c), this.positionVector(halfedge.next.vertex).minus(c))
             if (angle < 0) {
@@ -325,7 +326,7 @@ class MyMesh extends Mesh {
         halfedge.twin = new_halfedge_twin;
     }
     
-    check() {
+    check(triangular=true, face=true) {
         for (const halfedge of this.halfedges) {
             if(halfedge.next == halfedge) {
                 console.log(".next self reference")
@@ -333,17 +334,37 @@ class MyMesh extends Mesh {
             if(halfedge.prev == halfedge) {
                 console.log(".prev self reference")
             }
-            if (halfedge.next.prev !== halfedge) {
-                console.log(".next.prev !== this", halfedge);
+            if (!halfedge.next) {
+                console.log(".next undefined", halfedge)
+            } else {
+                if (halfedge.next.prev !== halfedge) {
+                    console.log(".next.prev !== this", halfedge);
+                }
+                if (triangular && !halfedge.onBoundary && halfedge.next.next.next !== halfedge) {
+                    console.log(".next.next.next !== this", halfedge);
+                }
+                if (halfedge.vertex === halfedge.next.vertex) {
+                    console.log("duplicated vertex (next)", halfedge);
+                }
+                if (halfedge.vertex !== halfedge.twin.next.vertex) {
+                    console.log("Vertex is not unique for halfedges touching it (next)", halfedge);
+                }
             }
-            if (halfedge.prev.next !== halfedge) {
-                console.log(".prev.next !== this", halfedge);
-            }
-            if (!halfedge.onBoundary && halfedge.next.next.next !== halfedge) {
-                console.log(".next.next.next !== this", halfedge);
-            }
-            if (!halfedge.onBoundary && halfedge.prev.prev.prev !== halfedge) {
-                console.log(".prev.prev.prev !== this", halfedge);
+            if (!halfedge.prev) {
+                console.log(".prev undefined", halfedge)
+            } else {
+                if (halfedge.prev.next !== halfedge) {
+                    console.log(".prev.next !== this", halfedge);
+                }
+                if (triangular && !halfedge.onBoundary && halfedge.prev.prev.prev !== halfedge) {
+                    console.log(".prev.prev.prev !== this", halfedge);
+                }
+                if (halfedge.vertex === halfedge.prev.vertex) {
+                    console.log("duplicated vertex (prev)", halfedge);
+                }
+                if (halfedge.vertex !== halfedge.prev.twin.vertex) {
+                    console.log("Vertex is not unique for halfedges touching it (prev)", halfedge);
+                }
             }
             if (halfedge.twin.twin !== halfedge) {
                 console.log(".twin.twin !== this", halfedge);
@@ -351,39 +372,37 @@ class MyMesh extends Mesh {
             if (halfedge.edge !== halfedge.twin.edge) {
                 console.log("edge !== twin.edge", halfedge);
             }
-            if (halfedge.face !== halfedge.next.face) {
-                console.log("face !== next.face", halfedge);
+            if (face) {
+                if (halfedge.face !== halfedge.next.face) {
+                    console.log("face !== next.face", halfedge);
+                }
+                if (halfedge.face) {
+                    if (halfedge.face.halfedge && halfedge.face !== halfedge.face.halfedge.face) {
+                        console.log("face does not contain halfedge");
+                    }
+                    if (!halfedge.onBoundary && this.faces[halfedge.face.index] !== halfedge.face) {
+                        console.log("Face not found at index", halfedge);
+                    }
+                } else {
+                    console.log("halfedge doesn't have a face");
+                }
             }
-            if (halfedge.face !== halfedge.face.halfedge.face) {
-                console.log("face does not contain halfedge");
-            }
-            if (halfedge.vertex === halfedge.next.vertex || halfedge.vertex === halfedge.prev.vertex) {
-                console.log("duplicated vertex", halfedge);
-            }
+
             if (this.halfedges[halfedge.index] !== halfedge) {
                 console.log("Halfedge not found at index", halfedge);
             }
             if (this.vertices[halfedge.vertex.index] !== halfedge.vertex) {
                 console.log("Vertice not found at index", halfedge);
             }
-            if (!halfedge.onBoundary && this.faces[halfedge.face.index] !== halfedge.face) {
-                console.log("Face not found at index", halfedge);
-            }
             if (this.edges[halfedge.edge.index] !== halfedge.edge) {
                 console.log("Edge not found at index", halfedge);
-            }
-            if (halfedge.vertex !== halfedge.twin.next.vertex) {
-                console.log("Vertex is not unique for halfedges touching it (next)", halfedge);
-            }
-            if (halfedge.vertex !== halfedge.prev.twin.vertex) {
-                console.log("Vertex is not unique for halfedges touching it (prev)", halfedge);
             }
         }
         for (const face of this.faces) {
             if (face.halfedge.face !== face) {
                 console.log("Face is present, but not used");
             }
-            if (face.halfedge.next.next.next !== face.halfedge) {
+            if (triangular && face.halfedge.next.next.next !== face.halfedge) {
                 console.log("Face has more than 3 vertices");
             }
         }
