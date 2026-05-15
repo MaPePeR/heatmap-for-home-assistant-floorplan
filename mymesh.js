@@ -17,7 +17,7 @@ class MyGeometry extends Geometry {
     }
 
     positionVector(vertex) {
-        return this.positions[vertex.index];
+        return this.positions[vertex];
     }
 
     angleBetweenVectors(v1, v2) {
@@ -95,6 +95,62 @@ class MyGeometry extends Geometry {
 }
 
 class MyMesh extends Mesh {
+
+    buildFromPolygon(polygonPoints) {
+        let nVertices = polygonPoints.length;
+        let nEdges = nVertices;
+        let nFaces = 0;
+        let nHalfedges = 2 * nEdges;
+
+        this.vertices = new Array(nVertices);
+        this.edges = new Array(nEdges);
+        this.faces = new Array(nFaces);
+        this.halfedges = new Array(nHalfedges);
+
+        for (let i = 0; i < polygonPoints.length; i++) {
+            const newVertex = new Vertex();
+            newVertex.index = i;
+            this.vertices[i] = newVertex;
+
+            const newHalfedge = new Halfedge();
+            newHalfedge.index = i;
+            newHalfedge.vertex = newVertex;
+            newHalfedge.onBoundary = false;
+            this.halfedges[i] = newHalfedge;
+
+            newVertex.halfedge = newHalfedge;
+
+            const newEdge = new Edge();
+            newEdge.halfedge = newHalfedge;
+            this.edges[i] = newEdge;
+        }
+        for (let i = 0; i < nVertices; i++) {
+            this.halfedges[i].next = this.halfedges[(i + 1) % nVertices];
+            this.halfedges[i].prev = this.halfedges[(nVertices + i - 1) % nVertices];
+        }
+
+        const boundaryFace = new Face();
+        let boundaryIndex = nVertices;
+        for (let i = 0; i < polygonPoints.length; i++) {
+            const twin = this.halfedges[i];
+
+            const newBoundaryHalfedge = new Halfedge();
+            newBoundaryHalfedge.index = boundaryIndex;
+            newBoundaryHalfedge.vertex = twin.next.vertex;
+            newBoundaryHalfedge.twin = twin;
+            newBoundaryHalfedge.onBoundary = true;
+            twin.twin = newBoundaryHalfedge;
+            newBoundaryHalfedge.face = boundaryFace;
+
+            this.halfedges[boundaryIndex++] = newBoundaryHalfedge;
+        }
+
+        for (let i = 0; i < nVertices; i++) {
+            const boundaryHalfedge = this.halfedges[nVertices + i];
+            boundaryHalfedge.next = boundaryHalfedge.twin.prev.twin;
+            boundaryHalfedge.prev = boundaryHalfedge.twin.next.twin;
+        }
+    }
     
     splitHalfEdge(halfedge) {
         if (halfedge.onBoundary) {

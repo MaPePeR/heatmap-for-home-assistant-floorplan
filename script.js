@@ -60,7 +60,7 @@ function generateDistances() {
                 sensors: {},
             };
             for (const sensor of sensors) {
-                result.sensors[sensor.id] = area.getTextureData(sensor);
+                result.sensors[sensor.id] = area_data.getTextureData(sensor);
             }
             results[area.id] = result
         }
@@ -184,5 +184,8 @@ class Area {
 }
 
 function createDistanceGeometry(polygon, sourcePoint) {
-
+    const mesh = new MyMesh();
+    mesh.buildFromPolygon(polygon);
+    const geometry = new MyGeometry(mesh, polygon, false);
+    return geometry;
 }
