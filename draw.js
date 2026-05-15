@@ -38,17 +38,22 @@ void main() {
     
     // Find minimum distance to any edge
     float edgeDist = min(min(bary.x, bary.y), bary.z);
-    if (edgeDist < 0.01) {
+    if (true && edgeDist < 0.01) {
         outColor = vec4(0,0,0,1);
     } else {
         if (v_distance.z >= 0.0) {
-            float l =0.5 * (length(v_pos - v_distance.xy) + v_distance.z);
-            outColor = vec4(1, 0.25 + l, 0.25 + l , 1);
+            vec2 d = v_pos - v_distance.xy;
+            float l = 0.5 * (length(d) + v_distance.z);
+            //float l = v_distance.z;
+            //float l = dot(d,d);
+            //float l = length(d);
+            outColor = vec4(1, l, l , 1);
             //outColor = vec4(bary.xzy,1);
+            //outColor = vec4((v_distance.xy + 1.0)/2.0, v_distance.z,1);
         } else {
-            outColor = vec4(0,0,0,0);
+            outColor = vec4(1,1,0,1);
         }
-
+        
     }
 }
 `;
