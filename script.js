@@ -279,6 +279,9 @@ function createDistanceGeometry(polygon, sourcePoint) {
             const previousHalfedgeOnNewFace = referencePrevious ? newHalfedge.twin.prev : newHalfedge.prev.prev;
             const nextHalfedgeOnNewFace = referencePrevious ? newHalfedge.twin.next.next : newHalfedge.next
 
+            newHalfedgeOnThisFace.distanceToSource = geometry.distToSegment(face.source, newHalfedgeOnThisFace.edge) + face.distanceSum;
+            previousHalfedgeOnNewFace.distanceToSource = geometry.distToSegment(newFace.source, previousHalfedgeOnNewFace.edge) + newFace.distanceSum;
+            nextHalfedgeOnNewFace.distanceToSource = geometry.distToSegment(newFace.source, nextHalfedgeOnNewFace.edge) + newFace.distanceSum;
             nextEdges.push({
                 halfedge: newHalfedgeOnThisFace,
                 referencePrevious: referencePrevious,
