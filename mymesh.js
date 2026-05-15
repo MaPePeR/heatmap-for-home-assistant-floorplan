@@ -112,7 +112,7 @@ class MyGeometry extends Geometry {
         }
     }
 
-    distToSegment(p, edge) {
+    distToSegment(p, edge, clamp=true) {
         const a = this.positionVector(edge.halfedge.vertex);
         const b = this.positionVector(edge.halfedge.next.vertex);
         var l2 = Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2);
@@ -120,7 +120,9 @@ class MyGeometry extends Geometry {
         
         // Project point p onto the line, clamping between 0 and 1
         var t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2;
-        t = Math.max(0, Math.min(1, t));
+        if (clamp) {
+            t = Math.max(0, Math.min(1, t));
+        }
         
         // Find closest point on segment
         var closest = new Vector(
@@ -144,6 +146,47 @@ class MyGeometry extends Geometry {
         return minEdge;
     }
 
+    intersectRayEdge(point, direction, edge) {
+        const eps = 10e-10;
+        const A = this.positionVector(edge.halfedge.vertex);
+        const B = this.positionVector(edge.halfedge.twin.vertex);
+
+        const lineA = point;
+        
+        const denom = (B.x - A.x) * (direction.y) - (B.y - A.y) * (direction.x);
+        if (Math.abs(denom) < eps) {
+            // Parallel lines?
+            if (this.distToSegment(lineA, edge, false) < eps) {
+                // Edge and ray are on the same line
+                let d_a;
+                let d_b;
+                if (Math.abs(direction.x) > Math.abs(direction.y)) {
+                    d_a = (A.x - point.x) / direction.x;
+                    d_b = (B.x - point.x) / direction.x;
+                } else {
+                    d_a = (A.y - point.y) / direction.y;
+                    d_b = (B.y - point.y) / direction.y;
+                }
+                if (d_a < 0 && d_b < 0) {
+                    return null;
+                }
+                if (d_a < d_b) {
+                    return [d_a, 0];
+                } else {
+                    return [d_b, 1];
+                }
+            } else {
+                return null;
+            }
+        }
+        
+        const ratio = ((lineA.x - A.x) * (direction.y) - (lineA.y - A.y) * (direction.x)) / denom;
+        const d = ((lineA.x - A.x) * (B.y - A.y) - (lineA.y - A.y) * (B.x - A.x)) / denom;
+        
+        return [d, ratio];
+        
+    }
+
     closestIntersectionEdgeWithLine(point, direction) {
         let minDistance = Infinity;
         let minEdge = null;
@@ -151,21 +194,14 @@ class MyGeometry extends Geometry {
 
         direction = direction.unit();
         
-        const lineA = point;
-
         for (const edge of this.mesh.edges) {
-            const A = this.positionVector(edge.halfedge.vertex);
-            const B = this.positionVector(edge.halfedge.twin.vertex);
+            const intersection = this.intersectRayEdge(point, direction, edge);
 
-            const denom = (B.x - A.x) * (direction.y) - (B.y - A.y) * (direction.x);
-            if (denom == 0) {
-                // Parallel lines?
+            if (!intersection) {
                 continue;
             }
-            
-            const ratio = ((lineA.x - A.x) * (direction.y) - (lineA.y - A.y) * (direction.x)) / denom;
-            const d = ((lineA.x - A.x) * (B.y - A.y) - (lineA.y - A.y) * (B.x - A.x)) / denom;
-            
+
+            const [d,ratio] = intersection;
             if (0 <= ratio && ratio < 1 && d > 0) {
                 if (d < minDistance) {
                     minDistance = d;

@@ -245,9 +245,18 @@ function createDistanceGeometry(polygon, sourcePoint) {
             if (!intersection) {
                 throw new Error("Failed to intersect");
             }
-            geometry.insertPointIntoEdge(intersection.point, intersection.edge)
+
+            const splitPointDistanceToVertex = geometry.length(intersection.edge) * Math.min(intersection.ratio, 1-intersection.ratio)
+            let newEdgeTo;
+            if (splitPointDistanceToVertex < 2/1000) {
+                console.log("Intersection very close");
+                newEdgeTo = intersection.ratio < 0.5 ? intersection.edge.halfedge : intersection.edge.halfedge.next;
+            } else {
+                geometry.insertPointIntoEdge(intersection.point, intersection.edge)
+                newEdgeTo = intersection.edge.halfedge.next;
+            }
             const newEdgeFrom = referencePrevious ? halfedge.prev : halfedge;
-            const newHalfedge = geometry.mesh.addEdgeConnectingHalfedges(newEdgeFrom, intersection.edge.halfedge.next)
+            const newHalfedge = geometry.mesh.addEdgeConnectingHalfedges(newEdgeFrom, newEdgeTo)
             console.log(geometry.printAllHalfedges())
             //geometry.check(false, false)
 
