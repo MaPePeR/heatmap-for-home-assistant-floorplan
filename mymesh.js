@@ -73,6 +73,25 @@ class MyGeometry extends Geometry {
         }
         console.log("CCW:", ccwCount, "CW:", cwCount)
     }
+
+    fixRotations() {
+        for (const halfedge of this.mesh.halfedges) {
+            if (halfedge.onBoundary) continue;
+            const c = this.centroid(halfedge.face);
+            const angle = this.smallestAngleBetweenVectors(this.positionVector(halfedge.vertex).minus(c), this.positionVector(halfedge.next.vertex).minus(c))
+            if (angle < 0) {
+                const p1 = halfedge;
+                const p2 = halfedge.next
+                const p3 = halfedge.next.next;
+                p1.next = p3;
+                p2.next = p1;
+                p3.next = p2;
+                p1.prev = p2;
+                p2.prev = p3;
+                p3.prev = p1;
+            }
+        }
+    }
 }
 
 class MyMesh extends Mesh {
