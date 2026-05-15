@@ -227,7 +227,7 @@ function createDistanceGeometry(polygon, sourcePoint) {
 
         console.log(geometry.printHalfedge(halfedge));
 
-        if (Math.abs(angle) < 10e-10||(!referencePrevious && angle < 0) || (referencePrevious && angle > 0)) {
+        if (Math.abs(angle) < 10e-4||(!referencePrevious && angle < 0) || (referencePrevious && angle > 0)) {
             // Source is visible for whole edge
             halfedge.face = face;
             const nextHalfedge = referencePrevious ? halfedge.next : halfedge.prev;
