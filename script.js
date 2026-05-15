@@ -56,7 +56,11 @@ function generateDistances() {
     try {
         for (const area of areas) {
             const area_data = new Area(area, sensors, canvas)
+            try {
             area_data.splitMeshForSensorDistances(sensors[0])
+            } catch (e) {
+                console.log(e);
+            }
             const result = {
                 tex: area_data.getTextureData(),
                 sensor: area_data.getSensorData(),
@@ -67,9 +71,8 @@ function generateDistances() {
         console.log(results)
         resultcontainer.innerText = JSON.stringify(results, null, "  ");
         createRenderer(results)
-    } catch (e) {
-        errorcontainer.innerText += ""+e
-        throw e
+    /*} catch (e) {
+        errorcontainer.innerText += ""+e*/
     } finally {
         memoryManager.deleteExcept([])
     }
