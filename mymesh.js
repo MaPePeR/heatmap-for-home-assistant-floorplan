@@ -12,6 +12,8 @@ class MyGeometry extends Geometry {
         const new_pos = pos1.plus(pos2.minus(pos1).times(ratio))
         this.mesh.splitHalfEdge(halfedge);
         this.positions[halfedge.next.vertex.index] = new_pos;
+
+        this.check();
     }
 
     positionVector(vertex) {
