@@ -26,7 +26,11 @@ class MyGeometry extends Geometry {
         // https://stackoverflow.com/a/16544330
         const dot = v1.x*v2.x + v1.y*v2.y;
         const det = v1.x*v2.y - v1.y*v2.x;
-        return Math.atan2(-det, -dot) + Math.PI;
+        const angle = Math.atan2(-det, -dot) + Math.PI;
+        if (!isFinite(angle)) {
+            throw new Error("Error calculating angle");
+        }
+        return angle
     }
 
     smallestAngleBetweenVectors(v1, v2) {
@@ -35,7 +39,11 @@ class MyGeometry extends Geometry {
         // https://stackoverflow.com/a/16544330
         const dot = v1.x*v2.x + v1.y*v2.y;
         const det = v1.x*v2.y - v1.y*v2.x;
-        return Math.atan2(det, dot)
+        const angle = Math.atan2(det, dot)
+        if (!isFinite(angle)) {
+            throw new Error("Error calculating angle");
+        }
+        return angle
     }
 
     printFace(f) {
@@ -54,6 +62,16 @@ class MyGeometry extends Geometry {
         const p1 = this.positionVector(halfedge.vertex);
         const p2 = this.positionVector(halfedge.next.vertex);
         return `Vector((${p1.x}, ${p1.y}), (${p2.x}, ${p2.y}))`
+    }
+
+    printAllHalfedges(boundary=false) {
+        let r = [];
+        for (const halfedge of this.mesh.halfedges) {
+            if (!halfedge.onBoundary || (boundary)) {
+                r.push(this.printHalfedge(halfedge))
+            }
+        }
+        return `{${r.join(",")}}`;
     }
 
     check(triangular=true, face=true) {
@@ -93,6 +111,83 @@ class MyGeometry extends Geometry {
             }
         }
     }
+
+    distToSegment(p, edge) {
+        const a = this.positionVector(edge.halfedge.vertex);
+        const b = this.positionVector(edge.halfedge.next.vertex);
+        var l2 = Math.pow(b.x - a.x, 2) + Math.pow(b.y - a.y, 2);
+        if (l2 === 0) return Math.hypot(p.x - a.x, p.y - a.y); // a == b
+        
+        // Project point p onto the line, clamping between 0 and 1
+        var t = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2;
+        t = Math.max(0, Math.min(1, t));
+        
+        // Find closest point on segment
+        var closest = new Vector(
+          a.x + t * (b.x - a.x),
+          a.y + t * (b.y - a.y)
+        );
+        
+        return Math.hypot(p.x - closest.x, p.y - closest.y);
+      }
+
+    getClosestEdgeToPoint(point) {
+        let minDistance = Infinity;
+        let minEdge = null;
+        for (const edge of this.mesh.edges) {
+            const d = this.distToSegment(point, edge)
+            if (d < minDistance) {
+                minDistance = d;
+                minEdge = edge;
+            }
+        }
+        return minEdge;
+    }
+
+    closestIntersectionEdgeWithLine(point, direction) {
+        let minDistance = Infinity;
+        let minEdge = null;
+        let minRatio = null;
+
+        direction = direction.unit();
+        
+        const lineA = point;
+
+        for (const edge of this.mesh.edges) {
+            const A = this.positionVector(edge.halfedge.vertex);
+            const B = this.positionVector(edge.halfedge.twin.vertex);
+
+            const denom = (B.x - A.x) * (direction.y) - (B.y - A.y) * (direction.x);
+            if (denom == 0) {
+                // Parallel lines?
+                continue;
+            }
+            
+            const ratio = ((lineA.x - A.x) * (direction.y) - (lineA.y - A.y) * (direction.x)) / denom;
+            const d = ((lineA.x - A.x) * (B.y - A.y) - (lineA.y - A.y) * (B.x - A.x)) / denom;
+            
+            if (0 <= ratio && ratio < 1 && d > 0) {
+                if (d < minDistance) {
+                    minDistance = d;
+                    minEdge = edge;
+                    minRatio = ratio;
+                }
+            }
+        }
+        if (minEdge) {
+            if (!minEdge.halfedge.twin.onBoundary) {
+                throw new Error("Found closest edge, but its twin is not a boundary");
+            }
+            return {edge: minEdge, distance: minDistance, ratio: minRatio, point: point.plus(direction.times(minDistance))};
+        } else {
+            return null;
+        }
+    }
+
+    insertPointIntoEdge(point, edge) {
+        const newVertex = this.mesh.insertVertexIntoEdge(edge);
+        this.positions[newVertex] = point;
+    }
 }
 
 class MyMesh extends Mesh {
@@ -113,17 +208,19 @@ class MyMesh extends Mesh {
             newVertex.index = i;
             this.vertices[i] = newVertex;
 
+            const newEdge = new Edge();
+            newEdge.index = i;
+            this.edges[i] = newEdge;
+            
             const newHalfedge = new Halfedge();
             newHalfedge.index = i;
             newHalfedge.vertex = newVertex;
             newHalfedge.onBoundary = false;
+            newHalfedge.edge = newEdge;
             this.halfedges[i] = newHalfedge;
 
             newVertex.halfedge = newHalfedge;
-
-            const newEdge = new Edge();
             newEdge.halfedge = newHalfedge;
-            this.edges[i] = newEdge;
         }
         for (let i = 0; i < nVertices; i++) {
             this.halfedges[i].next = this.halfedges[(i + 1) % nVertices];
@@ -140,6 +237,7 @@ class MyMesh extends Mesh {
             newBoundaryHalfedge.vertex = twin.next.vertex;
             newBoundaryHalfedge.twin = twin;
             newBoundaryHalfedge.onBoundary = true;
+            newBoundaryHalfedge.edge = twin.edge;
             twin.twin = newBoundaryHalfedge;
             newBoundaryHalfedge.face = boundaryFace;
 
@@ -152,7 +250,111 @@ class MyMesh extends Mesh {
             boundaryHalfedge.prev = boundaryHalfedge.twin.next.twin;
         }
     }
-    
+
+    addFace() {
+        const face =  new Face();
+        face.index = this.faces.length;
+        this.faces.push(face);
+        return face;
+    }
+
+    insertVertexIntoEdge(edge) {
+        const newHalfedge_straight = new Halfedge();
+        newHalfedge_straight.index = this.halfedges.length;
+        newHalfedge_straight.debug = "newHalfedge_straight"
+        this.halfedges.push(newHalfedge_straight);
+
+        const newHalfedge_twin = new Halfedge();
+        newHalfedge_twin.index = this.halfedges.length;
+        newHalfedge_twin.debug = "newHalfedge_twin"
+        this.halfedges.push(newHalfedge_twin);
+
+        const newVertex = new Vertex();
+        newVertex.index = this.vertices.length;
+        newVertex.halfedge = newHalfedge_straight;
+        this.vertices.push(newVertex);
+
+        const newEdge = new Edge();
+        newEdge.index = this.edges.length;
+        newEdge.halfedge = newHalfedge_straight;
+        this.edges.push(newEdge);
+
+        const halfedge = edge.halfedge;
+
+        newHalfedge_straight.vertex = newVertex;
+        newHalfedge_straight.edge = newEdge;
+        newHalfedge_straight.face = halfedge.face;
+        newHalfedge_straight.twin = halfedge.twin;
+        newHalfedge_straight.next = halfedge.next;
+        newHalfedge_straight.prev = halfedge;
+        newHalfedge_straight.onBoundary = halfedge.onBoundary;
+
+        newHalfedge_twin.vertex = newVertex;
+        newHalfedge_twin.edge = halfedge.edge
+        newHalfedge_twin.face = halfedge.twin.face
+        newHalfedge_twin.twin = halfedge;
+        newHalfedge_twin.next = halfedge.twin.next;
+        newHalfedge_twin.prev = halfedge.twin;
+        newHalfedge_twin.onBoundary = halfedge.twin.onBoundary;
+
+        halfedge.twin.edge = newEdge;
+
+        halfedge.twin.next.prev = newHalfedge_twin;
+        halfedge.twin.next = newHalfedge_twin;
+        halfedge.next.prev = newHalfedge_straight
+        halfedge.next = newHalfedge_straight;
+
+        halfedge.twin.twin = newHalfedge_straight;
+        halfedge.twin = newHalfedge_twin;
+
+        return newVertex;
+    }
+
+    addEdgeConnectingHalfedges(halfedge_from, halfedge_to) {
+        if (halfedge_from.onBoundary || halfedge_to.onBoundary)  {
+            throw new Error("Cannot connect boundary edges");
+        }
+        if (halfedge_from.next.face || halfedge_to.face) {
+            //throw new Error("Cannot split existing face");
+        }
+        const newHalfedge_next = new Halfedge();
+        newHalfedge_next.index = this.halfedges.length;
+        this.halfedges.push(newHalfedge_next);
+
+        const newHalfedge_twin = new Halfedge();
+        newHalfedge_twin.index = this.halfedges.length;
+        this.halfedges.push(newHalfedge_twin);
+
+        const newEdge = new Edge();
+        newEdge.index = this.edges.length;
+        newEdge.halfedge = newHalfedge_next;
+        this.edges.push(newEdge);
+
+        newHalfedge_next.vertex = halfedge_from.next.vertex;
+        newHalfedge_next.edge = newEdge;
+        newHalfedge_next.face = halfedge_from.face;
+        newHalfedge_next.twin = newHalfedge_twin;
+        newHalfedge_next.next = halfedge_to;
+        newHalfedge_next.prev = halfedge_from;
+        newHalfedge_next.onBoundary = false;
+
+        newHalfedge_twin.vertex = halfedge_to.vertex;
+        newHalfedge_twin.edge = newEdge;
+        newHalfedge_twin.face = null;
+        newHalfedge_twin.twin = newHalfedge_next;
+        newHalfedge_twin.next = halfedge_from.next;
+        newHalfedge_twin.prev = halfedge_to.prev;
+        newHalfedge_twin.onBoundary = false;
+
+        halfedge_from.next.prev = newHalfedge_twin;
+        halfedge_from.next = newHalfedge_next;
+
+        halfedge_to.prev.next = newHalfedge_twin;
+        halfedge_to.prev = newHalfedge_next;
+
+        return newHalfedge_next;
+    }
+
     splitHalfEdge(halfedge) {
         if (halfedge.onBoundary) {
             throw new Error("Cannot split boundary edge");
