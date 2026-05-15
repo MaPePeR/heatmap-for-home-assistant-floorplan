@@ -198,6 +198,7 @@ class Area {
         
         this.mesh = createMesh(this.polygon);
         this.geometry = new MyGeometry(this.mesh, this.polygon.v, false);
+        this.geometry.check();
     }
 
     findFace(point) {
@@ -221,44 +222,43 @@ class Area {
             throw new Error("Couldn't find sensor face");
         }
 
-        const todos = [];
-        let todo;
-        let completeFaceTodos = [
-            {
-                halfedge: sensorFace.halfedge,
-                point: point,
-                distance: 0,
-                minVector: this.geometry.positionVector(sensorFace.halfedge.vertex).minus(point),
-                maxAngle: 2*Math.PI, // 2PI / 360 degrees
-            }
-        ];
-        let partialTodos = [];
+        
+        sensorFace.distancePoint = point;
+        sensorFace.distanceSum = 0;
+
+        const completelyVisibleFaces = [sensorFace];
+        const halfedgesToCheck = [];
+        const halfedgesToRevisitLater = [];
         let doneSplit = false;
-        while (!doneSplit && (completeFaceTodos.length || todos.length)) {
-            while (completeFaceTodos.length || todos.length) {
-                while (todo = completeFaceTodos.shift()) {
-                    console.log("Complete face", todo.halfedge.face);
-                    console.log(this.geometry.printFace(todo.halfedge.face));
-                    todo.halfedge.face.distancePoint = todo.point;
-                    todo.halfedge.face.distanceSum = todo.distance;
-                    for (const halfedge of todo.halfedge.face.adjacentHalfedges()) {
+        while (!doneSplit && (completelyVisibleFaces.length || halfedgesToCheck.length)) {
+            while (completelyVisibleFaces.length || halfedgesToCheck.length) {
+                for(let face; face = completelyVisibleFaces.shift();) {
+                    if (!face.distancePoint || face.distanceSum === undefined) {
+                        throw new Error("Complete face is not initialized");
+                    }
+                    console.log("Complete face", face);
+                    console.log(this.geometry.printFace(face));
+                    for (const halfedge of face.adjacentHalfedges()) {
                         if (halfedge.twin.onBoundary) continue;
                         if (halfedge.twin.face.distancePoint) continue;
-                        const minVector = this.geometry.positionVector(halfedge.vertex).minus(todo.point);
-                        const maxVector = this.geometry.positionVector(halfedge.next.vertex).minus(todo.point);
+                        const minVector = this.geometry.positionVector(halfedge.vertex).minus(face.distancePoint);
+                        const maxVector = this.geometry.positionVector(halfedge.next.vertex).minus(face.distancePoint);
                         const maxAngle = this.geometry.angleBetweenVectors(minVector, maxVector);
-                        todos.push({
+                        halfedgesToCheck.push({
                             halfedge: halfedge.twin,
-                            point: todo.point,
-                            distance: todo.distance,
+                            point: face.distancePoint,
+                            distance: face.distanceSum,
                             minVector: minVector,
                             maxAngle: maxAngle,
                         })
                     }
                 }
 
-                while(todo = todos.shift()) {
-                    if (todo.halfedge.face.distancePoint) continue;
+                for(let todo; todo = halfedgesToCheck.shift();) {
+                    if (todo.halfedge.face.distancePoint) {
+                        console.log("Got todo for face that is already handled")
+                        continue;
+                    }
                     const v1 = this.geometry.positionVector(todo.halfedge.vertex).minus(todo.point);
                     const v2 = this.geometry.positionVector(todo.halfedge.next.vertex).minus(todo.point);
                     const v3 = this.geometry.positionVector(todo.halfedge.prev.vertex).minus(todo.point);
@@ -269,15 +269,20 @@ class Area {
                         && angle_v2 <= todo.maxAngle
                         && angle_v3 <= todo.maxAngle
                     ) {
+                        todo.halfedge.face.distancePoint = todo.point;
+                        todo.halfedge.face.distanceSum = todo.distance;
+                        completelyVisibleFaces.push(todo.halfedge.face);
                         completeFaceTodos.push(todo);
                     } else {
-                        partialTodos.push(todo);
+                        halfedgesToRevisitLater.push(todo);
                     }
                 }
                 /*
                 let unsolvedPartials = [];
                 
                 while(todo = partialTodos.shift()) {
+                    if (todo.halfedge.face.distancePoint) continue;
+                    let matched = false;
                     for (const halfedge of todo.halfedge.face.adjacentHalfedges()) {
                         if (halfedge.twin.face.distancePoint === todo.point
                             && halfedge.prev.twin.face.distancePoint === todo.point) {
@@ -285,19 +290,21 @@ class Area {
                                 if (todo.minVector.dot(v.minus(todo.point).unit()) < todo.maxAngle) {
                                     // Point is in viewcone and both adjacent faces are viewable.
                                     completeFaceTodos.push(todo)
-                                    continue;
+                                    matched = true;
+                                    break;
                                 }
                             }
                     }
-                    unsolvedPartials.push(todo);
+                    if (!matched) {
+                        unsolvedPartials.push(todo);
+                    }
                 }
                 partialTodos = unsolvedPartials;
                 */
             }
-            console.log("Unsolved:", partialTodos);
-            while (partialTodos.length) {
+            console.log("Unsolved:", halfedgesToRevisitLater);
+            for(let todo; todo = halfedgesToRevisitLater.shift();) {
                 doneSplit = false;
-                todo = partialTodos.shift();
                 if (!this.geometry.positionVector(todo.halfedge.vertex).isValid()) {
                     throw new Error("Invalid vector");
                 }
@@ -306,12 +313,6 @@ class Area {
                 let other_halfedge;
                 let fixedVertex;
                 const angle = this.geometry.smallestAngleBetweenVectors(todo.minVector, freeVertex.minus(todo.point));
-                if (angle < 2 * Math.PI/720) {
-                    console.log("Skip split with very small angle")
-                    completeFaceTodos.push(todo)
-                    continue;
-                }
-
                 if (angle < 0) {
                     halfedge_to_split = todo.halfedge.prev;
                     other_halfedge = todo.halfedge.next;
@@ -326,37 +327,33 @@ class Area {
                 const p3 = this.geometry.positionVector(halfedge_to_split.vertex);
                 const p4 = this.geometry.positionVector(halfedge_to_split.next.vertex);
                 let ratio = -((p1.x - p2.x)*(p1.y - p3.y) - (p1.y - p2.y)*(p1.x - p3.x)) / ((p1.x - p2.x)*(p3.y - p4.y) - (p1.y - p2.y)*(p3.x - p4.x))
-                if (ratio <= 0 || ratio >= 1) {
+                if (ratio <= 0.001 || ratio >= 0.999) {
                     console.log("Skipping halfedge split")
                     continue;
                     //throw new Error(`Ratio was not between 0 and 1: ${ratio}`)
                 }
                 this.geometry.splitHalfEdgeAtRatio(halfedge_to_split, ratio);
-                completeFaceTodos.push(todo)
                 if (angle < 0) {
-                    const minVector = this.geometry.vector(other_halfedge);
-                    const maxVector = this.geometry.vector(other_halfedge.prev.twin);
-                    const maxAngle = this.geometry.angleBetweenVectors(minVector, maxVector);
-                    completeFaceTodos.push({
-                        halfedge: other_halfedge.prev,
-                        point: fixedVertex,
-                        distance: fixedVertex.minus(todo.point).norm2() + todo.distance,
-                        minVector: minVector,
-                        maxAngle: maxAngle,
-                    })
+                    todo.halfedge.face.distancePoint = todo.point;
+                    todo.halfedge.face.distanceSum = todo.distance;
+                    completelyVisibleFaces.push(todo.halfedge.face)
+
+                    //other_halfedge.face.distancePoint = fixedVertex;
+                    //other_halfedge.face.distanceSum = fixedVertex.minus(todo.point).norm() + todo.distance;
+                    //completelyVisibleFaces.push(other_halfedge.face)
                 } else {
-                    const minVector = this.geometry.vector(other_halfedge.next);
-                    const maxVector = this.geometry.vector(other_halfedge.twin);
-                    const maxAngle = this.geometry.angleBetweenVectors(minVector, maxVector);
-                    completeFaceTodos.push({
-                        halfedge: other_halfedge.next,
-                        point: fixedVertex,
-                        distance: fixedVertex.minus(todo.point).norm2() + todo.distance,
-                        minVector: minVector,
-                        maxAngle: maxAngle,
-                    })
+                    todo.halfedge.face.distancePoint = todo.point;
+                    todo.halfedge.face.distanceSum = todo.distance;
+                    completelyVisibleFaces.push(todo.halfedge.face)
+
+                    //other_halfedge.face.distancePoint = fixedVertex;
+                    //other_halfedge.face.distanceSum = fixedVertex.minus(todo.point).norm() + todo.distance;
+                    //completelyVisibleFaces.push(other_halfedge.face)
                 }
                 console.log(`{${this.geometry.printFace(completeFaceTodos[completeFaceTodos.length - 2].halfedge.face)},${this.geometry.printFace(completeFaceTodos[completeFaceTodos.length - 1].halfedge.face)}}`)
+                for(let todo; todo = halfedgesToRevisitLater.shift();) {
+                    halfedgesToCheck.push(todo);
+                } 
                 break;
             }
 
@@ -390,6 +387,12 @@ class Area {
     }
 
     getSensorData() {
+        let maxDistance = 0;
+        for(const face of this.mesh.faces) {
+            if (face.distanceSum > maxDistance) {
+                maxDistance = face.distanceSum;
+            }
+        }
         const data = new Float32Array(this.mesh.faces.length * 3);
         for (let i = 0; i < this.mesh.faces.length; i++) {
             const face = this.mesh.faces[i];
