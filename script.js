@@ -238,16 +238,16 @@ function createDistanceGeometry(polygon, sourcePoint) {
                     referencePrevious: closest.referencePrevious,
                 })
             }
-        } else if (!referencePrevious && angle > 0) {
-            console.log("angle for edge > 0")
+        } else if ((!referencePrevious && angle > 0) || (referencePrevious && angle < 0)) {
             const intersection = geometry.closestIntersectionEdgeWithLine(pointAlreadyVisited, pointAlreadyVisited.minus(sourcePoint))
             console.log(intersection);
 
             if (!intersection) {
                 throw new Error("Failed to intersect");
             }
-            const vertex = geometry.insertPointIntoEdge(intersection.point, intersection.edge)
-            const newHalfedge = geometry.mesh.addEdgeConnectingHalfedges(halfedge, intersection.edge.halfedge.next)
+            geometry.insertPointIntoEdge(intersection.point, intersection.edge)
+            const newEdgeFrom = referencePrevious ? halfedge.prev : halfedge;
+            const newHalfedge = geometry.mesh.addEdgeConnectingHalfedges(newEdgeFrom, intersection.edge.halfedge.next)
             console.log(geometry.printAllHalfedges())
             //geometry.check(false, false)
 
@@ -258,66 +258,35 @@ function createDistanceGeometry(polygon, sourcePoint) {
             newFace.distanceSum = face.distanceSum + pointAlreadyVisited.minus(sourcePoint).norm();
             newFace.halfedge = newHalfedge;
 
-            newHalfedge.face = newFace;
-            newHalfedge.prev.face = newFace;
-
-            // Retry halfedge after split
-            nextEdges.push({
-                halfedge: newHalfedge.twin,
-                referencePrevious: false,
-                debug: "retry"
-            });
-
-            nextEdges.push({
-                halfedge: newHalfedge.prev.prev,
-                referencePrevious: false,
-                debug: "new_face_prev"
-            });
-            nextEdges.push({
-                halfedge: newHalfedge.next,
-                referencePrevious: true,
-                debug: "new_face_next"
-            });
-        } else if (referencePrevious && angle < 0) {
-            const intersection = geometry.closestIntersectionEdgeWithLine(pointAlreadyVisited, pointAlreadyVisited.minus(sourcePoint))
-            console.log(intersection);
-
-            if (!intersection) {
-                throw new Error("Failed to intersect");
+            if (referencePrevious) {
+                newHalfedge.twin.face = newFace;
+                newHalfedge.twin.next.face = newFace;
+            } else {
+                newHalfedge.face = newFace;
+                newHalfedge.prev.face = newFace;
             }
 
-            geometry.insertPointIntoEdge(intersection.point, intersection.edge)
-            const newHalfedge = geometry.mesh.addEdgeConnectingHalfedges(halfedge.prev, intersection.edge.halfedge.next)
-            geometry.check(false, false)
-            console.log(geometry.printAllHalfedges())
+            const newHalfedgeOnThisFace = referencePrevious ? newHalfedge : newHalfedge.twin;
+            const previousHalfedgeOnNewFace = referencePrevious ? newHalfedge.twin.prev : newHalfedge.prev.prev;
+            const nextHalfedgeOnNewFace = referencePrevious ? newHalfedge.twin.next.next : newHalfedge.next
 
-            nextEdges = nextEdges.filter((c) => c.halfedge.edge !== intersection.edge)
-
-            const newFace = geometry.mesh.addFace();
-            newFace.source = pointAlreadyVisited;
-            newFace.distanceSum = face.distanceSum + pointAlreadyVisited.minus(sourcePoint).norm();
-            newFace.halfedge = newHalfedge.twin;
-
-            newHalfedge.twin.face = newFace;
-            newHalfedge.twin.next.face = newFace;
-
-            // Retry halfedge after split
             nextEdges.push({
-                halfedge: newHalfedge,
-                referencePrevious: true,
+                halfedge: newHalfedgeOnThisFace,
+                referencePrevious: referencePrevious,
                 debug: "retry"
             });
-
             nextEdges.push({
-                halfedge: newHalfedge.twin.prev,
+                halfedge: previousHalfedgeOnNewFace,
                 referencePrevious: false,
                 debug: "new_face_prev"
             });
             nextEdges.push({
-                halfedge: newHalfedge.twin.next.next,
+                halfedge: nextHalfedgeOnNewFace,
                 referencePrevious: true,
                 debug: "new_face_next"
             });
+        } else {
+            throw new Error("unreachable");
         }
 
     }
