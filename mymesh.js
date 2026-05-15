@@ -252,6 +252,12 @@ class MyMesh extends Mesh {
     
     check() {
         for (const halfedge of this.halfedges) {
+            if(halfedge.next == halfedge) {
+                console.log(".next self reference")
+            }
+            if(halfedge.prev == halfedge) {
+                console.log(".prev self reference")
+            }
             if (halfedge.next.prev !== halfedge) {
                 console.log(".next.prev !== this", halfedge);
             }
@@ -273,6 +279,9 @@ class MyMesh extends Mesh {
             if (halfedge.face !== halfedge.next.face) {
                 console.log("face !== next.face", halfedge);
             }
+            if (halfedge.face !== halfedge.face.halfedge.face) {
+                console.log("face does not contain halfedge");
+            }
             if (halfedge.vertex === halfedge.next.vertex || halfedge.vertex === halfedge.prev.vertex) {
                 console.log("duplicated vertex", halfedge);
             }
@@ -287,6 +296,20 @@ class MyMesh extends Mesh {
             }
             if (this.edges[halfedge.edge.index] !== halfedge.edge) {
                 console.log("Edge not found at index", halfedge);
+            }
+            if (halfedge.vertex !== halfedge.twin.next.vertex) {
+                console.log("Vertex is not unique for halfedges touching it (next)", halfedge);
+            }
+            if (halfedge.vertex !== halfedge.prev.twin.vertex) {
+                console.log("Vertex is not unique for halfedges touching it (prev)", halfedge);
+            }
+        }
+        for (const face of this.faces) {
+            if (face.halfedge.face !== face) {
+                console.log("Face is present, but not used");
+            }
+            if (face.halfedge.next.next.next !== face.halfedge) {
+                console.log("Face has more than 3 vertices");
             }
         }
     }
