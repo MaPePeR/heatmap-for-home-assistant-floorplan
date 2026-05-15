@@ -108,7 +108,7 @@ function getPolygon(area, convertCoords) {
         throw new Error(`Expected last path command to be Z`);
     }
     
-    console.log("Starting earcut")
+    console.log("Starting earcut", vertices_earcut)
     const triangles = earcut.default(vertices_earcut)
     console.log("Done earcut")
     return {
@@ -156,7 +156,9 @@ function insertVertexIntoPolygon(polygon, v) {
     for(let i = 0; i + 3 <= triangles.length; i += 3) {
         const i1=triangles[i], i2=triangles[i+1], i3=triangles[i+2];
         if (vertexInTriangle(v, vertices[i1], vertices[i2], vertices[i3])) {
+            console.log(`Found ${i}: ${v.x}, ${v.y}, ${v.z}`)
             if (found) {
+                // TODO: Ignore this, because Sensor might be on the edge
                 throw new Error("Found vertex in multiple triangles. Duplicate sensor?");
             }
             found = true;
@@ -193,12 +195,16 @@ class Area {
             .multiply(screen2canvas)
             .multiply(area2screen);
 
+        console.log(this.convertCoords)
 
         this.polygon = getPolygon(area, this.convertCoords);
         
         this.mesh = createMesh(this.polygon);
         this.geometry = new MyGeometry(this.mesh, this.polygon.v, false);
         this.geometry.check();
+        //console.log("Fixing rotations")
+        //this.geometry.fixRotations();
+        //this.geometry.check();
     }
 
     findFace(point) {
@@ -244,6 +250,7 @@ class Area {
                         const minVector = this.geometry.positionVector(halfedge.vertex).minus(face.distancePoint);
                         const maxVector = this.geometry.positionVector(halfedge.next.vertex).minus(face.distancePoint);
                         const maxAngle = this.geometry.angleBetweenVectors(minVector, maxVector);
+                        //console.log(minVector, maxVector, maxAngle)
                         halfedgesToCheck.push({
                             halfedge: halfedge.twin,
                             point: face.distancePoint,
@@ -272,14 +279,20 @@ class Area {
                         todo.halfedge.face.distancePoint = todo.point;
                         todo.halfedge.face.distanceSum = todo.distance;
                         completelyVisibleFaces.push(todo.halfedge.face);
-                        completeFaceTodos.push(todo);
                     } else {
+                        console.log("Cannot solve ", todo)
+                        console.log(this.geometry.printHalfedge(todo.halfedge));
+                        console.log(this.geometry.printFace(todo.halfedge.face));
+                        console.log(`Ray((${todo.point.x}, ${todo.point.y}), (${todo.point.x + todo.minVector.x}, ${todo.point.y + todo.minVector.y}))`)
+                        //console.log(`Angle((${todo.minVector.x}, ${todo.minVector.y}), (${v1.x},${v1.y})) = ${angle_v1} <= ${todo.maxAngle}?`)
+                        //console.log(`Angle((${todo.minVector.x}, ${todo.minVector.y}), (${v2.x},${v2.y})) = ${angle_v2} <= ${todo.maxAngle}?`)
+                        //console.log(`Angle((${todo.minVector.x}, ${todo.minVector.y}), (${v3.x},${v3.y})) = ${angle_v3} <= ${todo.maxAngle}?`)
                         halfedgesToRevisitLater.push(todo);
                     }
                 }
+                
                 /*
                 let unsolvedPartials = [];
-                
                 while(todo = partialTodos.shift()) {
                     if (todo.halfedge.face.distancePoint) continue;
                     let matched = false;
@@ -308,11 +321,18 @@ class Area {
                 if (!this.geometry.positionVector(todo.halfedge.vertex).isValid()) {
                     throw new Error("Invalid vector");
                 }
+                if (todo.halfedge.face.distancePoint) {
+                    console.log("Resplitting ");
+                }
                 const freeVertex = this.geometry.positionVector(todo.halfedge.prev.vertex);
                 let halfedge_to_split;
                 let other_halfedge;
                 let fixedVertex;
                 const angle = this.geometry.smallestAngleBetweenVectors(todo.minVector, freeVertex.minus(todo.point));
+                console.log("Splitting for halfedge", todo.halfedge, angle < 0)
+                console.log(this.geometry.printHalfedge(todo.halfedge))
+                console.log(this.geometry.printFace(todo.halfedge.face))
+                console.log(`Ray((${todo.point.x}, ${todo.point.y}), (${todo.point.x + todo.minVector.x}, ${todo.point.y + todo.minVector.y}))`)
                 if (angle < 0) {
                     halfedge_to_split = todo.halfedge.prev;
                     other_halfedge = todo.halfedge.next;
@@ -322,6 +342,8 @@ class Area {
                     other_halfedge = todo.halfedge.prev;
                     fixedVertex = this.geometry.positionVector(todo.halfedge.vertex);
                 }
+                console.log(this.geometry.printHalfedge(halfedge_to_split))
+                console.log(`Ray((${todo.point.x},${todo.point.y}),(${fixedVertex.x},${fixedVertex.y}))`)
                 const p1 = todo.point;
                 const p2 = fixedVertex;
                 const p3 = this.geometry.positionVector(halfedge_to_split.vertex);
@@ -333,6 +355,7 @@ class Area {
                     //throw new Error(`Ratio was not between 0 and 1: ${ratio}`)
                 }
                 this.geometry.splitHalfEdgeAtRatio(halfedge_to_split, ratio);
+                // halfedge.next/prev changed now.
                 if (angle < 0) {
                     todo.halfedge.face.distancePoint = todo.point;
                     todo.halfedge.face.distanceSum = todo.distance;
@@ -350,13 +373,15 @@ class Area {
                     //other_halfedge.face.distanceSum = fixedVertex.minus(todo.point).norm() + todo.distance;
                     //completelyVisibleFaces.push(other_halfedge.face)
                 }
-                console.log(`{${this.geometry.printFace(completeFaceTodos[completeFaceTodos.length - 2].halfedge.face)},${this.geometry.printFace(completeFaceTodos[completeFaceTodos.length - 1].halfedge.face)}}`)
+                console.log(`{${this.geometry.printFace(todo.halfedge.face)},`+
+                    `${this.geometry.printFace(other_halfedge.face)},`+
+                    `(${todo.point.x}, ${todo.point.y}),(${fixedVertex.x}, ${fixedVertex.y})`+
+                    `}`)
                 for(let todo; todo = halfedgesToRevisitLater.shift();) {
                     halfedgesToCheck.push(todo);
                 } 
                 break;
             }
-
         }
     }
 
