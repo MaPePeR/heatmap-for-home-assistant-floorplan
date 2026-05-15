@@ -239,6 +239,17 @@ function createDistanceGeometry(polygon, sourcePoint) {
                 })
             }
         } else if ((!referencePrevious && angle > 0) || (referencePrevious && angle < 0)) {
+            {
+                const prev_vector = geometry.vector((referencePrevious ? halfedge.prev : halfedge).twin);
+                const next_vector = geometry.vector(referencePrevious ? halfedge : halfedge.next);
+                const rayAngle = geometry.angleBetweenVectors(pointAlreadyVisited.minus(sourcePoint), prev_vector);
+                const cornerAngle = geometry.angleBetweenVectors(next_vector, prev_vector);
+                if (rayAngle > cornerAngle) {
+                    console.log("Intersection Ray leaves face. Ignoring")
+                    continue;
+                }
+            }
+
             const intersection = geometry.closestIntersectionEdgeWithLine(pointAlreadyVisited, pointAlreadyVisited.minus(sourcePoint))
             console.log(intersection);
 
