@@ -325,11 +325,19 @@ function createDistanceGeometry(polygon, sourcePoint) {
                     referencePrevious: false,
                     debug: "new_face_prev"
                 });
-                nextEdges.push({
-                    halfedge: nextHalfedgeOnNewFace,
-                    referencePrevious: true,
-                    debug: "new_face_next"
-                });
+                if (!previousHalfedgeOnNewFace.next.face) {
+                    throw new Error("Next halfedge doesn't have face")
+                }
+                if (nextHalfedgeOnNewFace != previousHalfedgeOnNewFace) {
+                    nextEdges.push({
+                        halfedge: nextHalfedgeOnNewFace,
+                        referencePrevious: true,
+                        debug: "new_face_next"
+                    });
+                    if (!nextHalfedgeOnNewFace.prev.face) {
+                        throw new Error("Prev edge doesn't have face")
+                    }
+                }
             } else {
                 throw new Error("unreachable");
             }
