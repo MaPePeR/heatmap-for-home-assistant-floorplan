@@ -56,17 +56,15 @@ function generateDistances() {
     try {
         for (const area of areas) {
             const area_data = new Area(area, sensors, canvas)
-            const result = {
-                sensors: {},
-            };
+            const result = {};
             for (const sensor of sensors) {
-                result.sensors[sensor.id] = area_data.getTextureData(sensor);
+                result[sensor.id] = area_data.getTextureData(sensor);
             }
             results[area.id] = result
         }
         console.log(results)
         resultcontainer.innerText = JSON.stringify(results, null, "  ");
-        //createRenderer(results)
+        createRenderer(results)
     /*} catch (e) {
         errorcontainer.innerText += ""+e*/
     } finally {

@@ -6,55 +6,37 @@ const SPACE_TRANSFORM_VERTEX_SHADER = `#version 300 es
 in vec2 a_position;
 in vec3 a_distance;
 out vec3 v_distance;
-out vec2 v_barycentric;
 out vec2 v_pos;
-
-const vec2[3] barycentrics = vec2[3](
-    vec2(0.0, 0.0),
-    vec2(1.0, 0.0),
-    vec2(0.0, 1.0)
-);
 
 
 void main() {
     gl_Position = vec4(a_position, 0, 1);
     v_pos = a_position;
     v_distance = a_distance;
-    v_barycentric = barycentrics[gl_VertexID % 3];
 }
 `;
 
 const BASIC_FRAGMENT_SHADER = `#version 300 es
 
 precision highp float;
-in vec2 v_barycentric;
 in vec3 v_distance;
 in vec2 v_pos;
 out vec4 outColor;
 
 void main() {
-    // Calculate distance to edges
-    vec3 bary = vec3(v_barycentric.xy, 1.0 - v_barycentric.x - v_barycentric.y);
-    
-    // Find minimum distance to any edge
-    float edgeDist = min(min(bary.x, bary.y), bary.z);
-    if (true && edgeDist < 0.01) {
-        outColor = vec4(0,0,0,1);
+    if (v_distance.z >= 0.0) {
+        vec2 d = v_pos - v_distance.xy;
+        float l = 0.5 * (length(d) + v_distance.z);
+        //float l = v_distance.z;
+        //float l = dot(d,d);
+        //float l = length(d);
+        l = clamp(l, 0.0, 1.0);
+        outColor = vec4(1, l, l , 1);
+        //outColor = vec4(0, 0, v_pos.y,1);
     } else {
-        if (v_distance.z >= 0.0) {
-            vec2 d = v_pos - v_distance.xy;
-            float l = 0.5 * (length(d) + v_distance.z);
-            //float l = v_distance.z;
-            //float l = dot(d,d);
-            //float l = length(d);
-            outColor = vec4(1, l, l , 1);
-            //outColor = vec4(bary.xzy,1);
-            //outColor = vec4((v_distance.xy + 1.0)/2.0, v_distance.z,1);
-        } else {
-            outColor = vec4(1,1,0,1);
-        }
-        
+        outColor = vec4(1,1,0,1);
     }
+        
 }
 `;
 
@@ -70,7 +52,89 @@ function readTex(tex) {
 
 function readSensorData(data) {
     const buffer = Uint8Array.fromBase64(data).buffer
-    return new Float32Array(buffer);
+    const view = new DataView(buffer);
+    
+    let pos = 0;
+    
+    // Uint16 1        Total Vertex Count
+    const vertexCount = view.getUint16(pos)
+    pos += 16/8;
+
+    // Uint16 1        Total Face Count N_f
+    const faceCount = view.getUint16(pos)
+    pos += 16/8;
+
+    // Float32 3*N_f   {sourceX, sourceY, sourceDistance}
+    const faceDistanceData = new Float32Array(buffer, pos, 3 * faceCount);
+    pos += 32/8 * 3 * faceCount;
+    
+    
+    // Uint16 N_f      Vertex Count for face
+    const faceVertexCount = new Uint16Array(buffer, pos, faceCount);
+    pos += 16/8 * faceCount;
+
+
+    // Float16 2*N_v   {vertexX, vertexY}
+    const vertexPositions = new Float16Array(buffer, pos, 2 * vertexCount);
+    pos += 16/8 * vertexCount * 2;
+
+    // Uint16 Sum(N_h) All vertex indices of faces 1..N_f
+    const faceData = new Array(faceCount);
+    let numberOfVertices = 0;
+    for (let i = 0; i < faceCount; i++) {
+        const vertexCount = faceVertexCount[i];
+        const indices = new Uint16Array(buffer, pos, vertexCount);
+        pos += 16/8 * vertexCount;
+        faceData[i] = {
+            vertexCountBeforeEarcut: vertexCount,
+            indices: indices,
+            distanceData: faceDistanceData.subarray(i * 3, i * 3 + 3),
+            earcutVertices: earcutFace(vertexPositions, indices),
+        }
+        numberOfVertices += faceData[i].earcutVertices.length;
+    }
+    const allFaceVertices = new Float16Array(numberOfVertices * 2);
+    const allFaceDistanceData = new Float32Array(numberOfVertices * 3);
+    let vertexPos = 0;
+    for (let i = 0; i < faceCount; i++) {
+        const faceVertexCount = faceData[i].earcutVertices.length / 2;
+        allFaceVertices.set(faceData[i].earcutVertices, vertexPos * 2)
+        
+        const distanceData = faceData[i].distanceData;
+        
+        for (let j = 0; j < faceVertexCount; j++) {
+            allFaceDistanceData[vertexPos*3 + j*3 + 0] = distanceData[0];
+            allFaceDistanceData[vertexPos*3 + j*3 + 1] = distanceData[1];
+            allFaceDistanceData[vertexPos*3 + j*3 + 2] = distanceData[2];
+        }
+
+        vertexPos += faceVertexCount;
+    }
+    return {
+        vertexPositions: vertexPositions,
+        faces: faceData,
+        allFaceVertices: allFaceVertices,
+        allFaceDistanceData: allFaceDistanceData,
+    }
+}
+
+function earcutFace(vertexPositions, indices) {
+    const earcutIndices = new Uint16Array(indices.length);
+    const earcutInput = new Float16Array(indices.length * 2);
+    for(let i = 0; i < indices.length; i++) {
+        const idx = indices[i];
+        earcutIndices[i] = idx;
+        earcutInput[i*2 + 0] = vertexPositions[idx*2 + 0]
+        earcutInput[i*2 + 1] = vertexPositions[idx*2 + 1]
+    }
+    const earcutResult = earcut.default(earcutInput);
+    const result = new Float16Array(earcutResult.length * 2)
+    for (let i = 0; i < earcutResult.length; i++) {
+        result[i*2 + 0] = earcutInput[earcutResult[i]*2 + 0];
+        result[i*2 + 1] = earcutInput[earcutResult[i]*2 + 1];
+    }
+    console.log(result)
+    return result;
 }
 
 let renderer = null;
@@ -127,21 +191,23 @@ function createProgram(ctx, vertex_code, fragment_code, attributes, uniforms) {
 class Renderer {
     constructor(data, canvas) {
         this.canvas = canvas;
-        this.areaTex = new Map();
-        this.sensorData = new Map();
-        for (let areaId in data) {
-            if (!Object.hasOwnProperty.call(data, areaId)) {
-                continue;
-            }
-            const area_data = data[areaId];
-            areaId = 'area'
-            this.areaTex.set(areaId, readTex(area_data.tex))
-            this.sensorData.set(areaId, readSensorData(area_data.sensor))
-        }
         this.ctx = canvas.getContext("webgl2");
+        
         if (!this.ctx) {
             throw new Error("Couldn't get WebGL2 Context");
         }
+
+        this.ctx_ext_float_color_buffer = this.ctx.getExtension('EXT_color_buffer_float');
+        if (!this.ctx_ext_float_color_buffer) {
+            throw new Error("Couldn't get 'EXT_color_buffer_float' extension");
+        }
+
+        this.ctx_texture_float_linear = this.ctx.getExtension("OES_texture_float_linear");
+        if (!this.ctx_texture_float_linear) {
+            throw new Error("Couldn't get 'OES_texture_float_linear' extension");
+        }
+
+
         this.renderTexProgram = createProgram(
             this.ctx,
             SPACE_TRANSFORM_VERTEX_SHADER,
@@ -150,48 +216,62 @@ class Renderer {
             [],
         )
 
-        this.vertexBuffer = this.ctx.createBuffer();
-        this.vertexArray = this.ctx.createVertexArray();
+        this.setupVertexArrayObjects(data);
+        this.render();
+    }
 
-        this.ctx.bindVertexArray(this.vertexArray);
+    setupVertexArrayObjects(data) {
+        this.vaos = new Map();
+        this.sensorRenderData = new Map();
 
-        this.distanceBuffer = this.ctx.createBuffer();
-        this.ctx.enableVertexAttribArray(this.renderTexProgram.attributes.get("a_distance"));
-        this.ctx.bindBuffer(this.ctx.ARRAY_BUFFER, this.distanceBuffer);
-        this.ctx.vertexAttribPointer(
-            this.renderTexProgram.attributes.get("a_distance"),
-            3, this.ctx.FLOAT,
-            false, 0, 0
-        );
-        const incoming_data = this.sensorData.get('area');
-       
-        const sensorData = new Float32Array(incoming_data.length * 3);
-        // Have to duplicate Face data for each vertex? Maybe replace with this.ctx.vertexAttribDivisor? Didn't work so far.
-        for(let i = 0; i < incoming_data.length; i+=3) {
-            sensorData[i * 3 + 0] = sensorData[i * 3 + 3] = sensorData[i * 3 + 6] = incoming_data[i + 0];
-            sensorData[i * 3 + 1] = sensorData[i * 3 + 4] = sensorData[i * 3 + 7] = incoming_data[i + 1];
-            sensorData[i * 3 + 2] = sensorData[i * 3 + 5] = sensorData[i * 3 + 8] = incoming_data[i + 2];
+        const sensorMap = new Map();
+        for (let areaId in data) {
+            if (!Object.hasOwnProperty.call(data, areaId)) {
+                continue;
+            }
+            const area_data = data[areaId];
+            for (const sensorId in data[areaId]) {
+                if (!Object.hasOwnProperty.call(data[areaId], sensorId)) {
+                    continue;
+                }
+                const sensorData = area_data[sensorId];
+                sensorMap.set(sensorId, readSensorData(sensorData));
+            }
         }
 
-        this.ctx.bufferData(this.ctx.ARRAY_BUFFER, new Float32Array(sensorData), this.ctx.STATIC_DRAW)
+        const ctx = this.ctx;
+        const positionAttrib = this.renderTexProgram.attributes.get("a_position");
+        const distanceAttrib = this.renderTexProgram.attributes.get("a_distance");
+        sensorMap.forEach((sensorData, sensorId) => {
+            console.log(sensorId, sensorData)
+            const vao = ctx.createVertexArray();
+            this.vaos.set(sensorId, vao);
+            ctx.bindVertexArray(vao);
+            
+            ctx.enableVertexAttribArray(positionAttrib);
 
-        this.ctx.enableVertexAttribArray(this.renderTexProgram.attributes.get("a_position"));
-        this.ctx.bindBuffer(this.ctx.ARRAY_BUFFER, this.vertexBuffer);
-        this.ctx.vertexAttribPointer(
-            this.renderTexProgram.attributes.get("a_position"),
-            2, this.ctx.FLOAT,
-            false, 0, 0
-        )
-        const v = this.areaTex.get('area').v;
-        const f=  this.areaTex.get('area').f;
-        this.positions = new Float32Array(f.length * 2);
-        for (let i = 0; i < f.length; i++) {
-            this.positions[i*2+0] = v[f[i] * 2 + 0];
-            this.positions[i*2+1] = v[f[i] * 2 + 1];
-        }
-        this.ctx.bufferData(this.ctx.ARRAY_BUFFER, new Float32Array(this.positions), this.ctx.STATIC_DRAW)
+            const vertexBuffer = ctx.createBuffer();
+            ctx.bindBuffer(ctx.ARRAY_BUFFER, vertexBuffer);
 
-        this.render()
+            ctx.vertexAttribPointer(positionAttrib, 2, ctx.HALF_FLOAT, false, 0, 0);
+            ctx.bufferData(ctx.ARRAY_BUFFER, new Float16Array(sensorData.allFaceVertices), ctx.STATIC_DRAW);
+
+            ctx.enableVertexAttribArray(distanceAttrib);
+
+            const distanceBuffer = ctx.createBuffer();
+            ctx.bindBuffer(ctx.ARRAY_BUFFER, distanceBuffer);
+
+            ctx.vertexAttribPointer(distanceAttrib, 3, ctx.FLOAT, false, 0, 0);
+            ctx.bufferData(ctx.ARRAY_BUFFER, new Float32Array(sensorData.allFaceDistanceData), ctx.STATIC_DRAW)
+
+            this.sensorRenderData.set(sensorId, {
+                vertexCount: sensorData.allFaceVertices.length / 3,
+                vertexBuffer: vertexBuffer,
+                distanceBuffer: distanceBuffer,
+            })
+            
+        });
+        
     }
 
     render() {
@@ -208,9 +288,12 @@ class Renderer {
             
             ctx.useProgram(this.renderTexProgram.prog)
 
-            ctx.bindVertexArray(this.vertexArray);
-
-            ctx.drawArrays(ctx.TRIANGLES, 0, this.positions.length / 2);
+            //const sensorId = "path2";
+            const sensorId = this.sensorRenderData.keys().next().value
+            ctx.bindVertexArray(this.vaos.get(sensorId));
+            const vertexCount = this.sensorRenderData.get(sensorId).vertexCount
+            console.log("Drawing ", sensorId, vertexCount);
+            ctx.drawArrays(ctx.TRIANGLES, 0, vertexCount);
         })
     }
 }
