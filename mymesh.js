@@ -225,7 +225,7 @@ class MyGeometry extends Geometry {
     }
 
     checkLineOfSight(point, edge) {
-        const eps = 10e-2;
+        const eps = 10e-4;
         if (this.distToSegment(point, edge, false) < eps) {
             return true;
             // Line of sight cone is basically a line
