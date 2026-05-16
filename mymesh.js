@@ -406,7 +406,7 @@ class MyMesh extends Mesh {
 
         newHalfedge_next.vertex = halfedge_from.next.vertex;
         newHalfedge_next.edge = newEdge;
-        newHalfedge_next.face = halfedge_from.face;
+        newHalfedge_next.face = null;//halfedge_from.face;
         newHalfedge_next.twin = newHalfedge_twin;
         newHalfedge_next.next = halfedge_to;
         newHalfedge_next.prev = halfedge_from;
