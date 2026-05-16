@@ -271,7 +271,7 @@ function createDistanceGeometry(polygon, sourcePoint) {
 
                 const splitPointDistanceToVertex = geometry.length(intersection.edge) * Math.min(intersection.ratio, 1-intersection.ratio)
                 let newEdgeTo;
-                if (splitPointDistanceToVertex < 2/1000) {
+                if (splitPointDistanceToVertex < 10e-4) {
                     console.log("Intersection very close");
                     newEdgeTo = intersection.ratio < 0.5 ? intersection.edge.halfedge : intersection.edge.halfedge.next;
                 } else {
