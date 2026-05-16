@@ -288,7 +288,7 @@ function createDistanceGeometry(polygon, sourcePoint) {
                 const newFace = geometry.mesh.addFace();
                 newFace.source = pointAlreadyVisited;
                 newFace.distanceSum = face.distanceSum + pointAlreadyVisited.minus(sourcePoint).norm();
-                newFace.halfedge = newHalfedge;
+                newFace.halfedge = referencePrevious ? newHalfedge.twin : newHalfedge;
 
                 if (referencePrevious) {
                     newHalfedge.twin.face = newFace;
