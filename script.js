@@ -212,19 +212,25 @@ function createDistanceGeometry(polygon, sourcePoint) {
         {halfedge: startEdge.halfedge.next, referencePrevious: true},
         {halfedge: startEdge.halfedge.prev, referencePrevious: false},
     ];
-    const bailedEdges = [];
     while (nextEdges.length) {
         while (nextEdges.length) {
             // TODO: Be smarter than this...
             nextEdges.sort((a,b) => a.halfedge.distanceToSource - b.halfedge.distanceToSource);
             const closest = nextEdges.shift();
             const halfedge = closest.halfedge;
+            if (halfedge.face) {
+                continue;
+            }
             const referencePrevious = closest.referencePrevious;
             const vertexAlreadyVisited = referencePrevious ? halfedge.vertex : halfedge.next.vertex;
             const newVertex = referencePrevious  ? halfedge.next.vertex : halfedge.vertex;
             const pointAlreadyVisited = geometry.positionVector(vertexAlreadyVisited);
             const newPoint = geometry.positionVector(newVertex);
             const face = referencePrevious ? halfedge.prev.face : halfedge.next.face;
+            if (!face) {
+                console.log("Couldn't find reference face");
+                continue;
+            }
             const sourcePoint = face.source;
             const angle = geometry.smallestAngleBetweenVectors(pointAlreadyVisited.minus(sourcePoint), newPoint.minus(sourcePoint));
 
@@ -232,7 +238,6 @@ function createDistanceGeometry(polygon, sourcePoint) {
 
             if (Math.abs(angle) < 10e-4||(!referencePrevious && angle < 0) || (referencePrevious && angle > 0)) {
                 if (!geometry.checkLineOfSight(sourcePoint, halfedge.edge)) {
-                    bailedEdges.push(closest);
                     continue;
                 }
                 // Source is visible for whole edge
@@ -319,29 +324,53 @@ function createDistanceGeometry(polygon, sourcePoint) {
                 throw new Error("unreachable");
             }
         }
-        for(let bailed; bailed = bailedEdges.shift();) {
-            const face = referencePrevious ? halfedge.prev.face : halfedge.next.face;
-            const sourcePoint = face.source;
-            let halfedge = bailed.halfedge;
-            do {
-                halfedge = bailed.referencePrevious ? halfedge.next : halfedge.prev
-            } while (!halfedge.face && !geometry.checkLineOfSight(sourcePoint, halfedge.edge));
-            if (halfedge.face) {
+        for(const face of geometry.mesh.faces) {
+            if (checkIfFaceComplete(face)) {
                 continue;
             }
-            halfedge.face = face;
-            halfedge.distanceToSource = geometry.distToSegment(face.source, halfedge.edge) + face.distanceSum;
+            const sourcePoint = face.source;
+            const faceHalfedges = [];
+            let halfedge = face.halfedge;
+            do {
+                if (!halfedge.face && geometry.checkLineOfSight(sourcePoint, halfedge.edge)) {
+                    halfedge.distanceToSource = geometry.distToSegment(face.source, halfedge.edge) + face.distanceSum;
+                    faceHalfedges.push(halfedge);
+                }
+                halfedge = halfedge.next;
+            } while (halfedge != face.halfedge);
+            if (faceHalfedges.length == 0) {
+                console.log("Couldn't find reseed candidate for face", face)
+                continue;
+            }
+            faceHalfedges.sort((a,b) => a.distanceToSource - b.distanceToSource);
+
+            const closestHalfedge = faceHalfedges[0];
+            closestHalfedge.face = face;
+            closestHalfedge.distanceToSource = geometry.distToSegment(face.source, closestHalfedge.edge) + face.distanceSum;
             nextEdges.push({
-                halfedge: halfedge.next,
+                halfedge: closestHalfedge.next,
                 referencePrevious: true,
             })
 
             nextEdges.push({
-                halfedge: halfedge.prev,
+                halfedge: closestHalfedge.prev,
                 referencePrevious: false,
             })
         }
     }
 
     return geometry;
+}
+
+function checkIfFaceComplete(face) {
+    if (face.complete) return true;
+    let halfedge = face.halfedge;
+    do {
+        if (!halfedge.face) {
+            return false;
+        }
+        halfedge = halfedge.next;
+    } while (halfedge != face.halfedge);
+    face.complete = true;
+    return true;
 }
