@@ -93,6 +93,9 @@ function getPolygon(area, convertCoords) {
         } else {
             throw new Error(`Found unexpected path command ${segment.type} at index ${i}`)
         }
+        if (vertices[vertices.length - 2].minus(vertices[vertices.length-1]).norm() < 10e-4) {
+            throw new Error("Duplicated point in polygon");
+        }
     }
     if (pathdata[pathdata.length - 1].type != "Z") {
         throw new Error(`Expected last path command to be Z`);
@@ -305,11 +308,18 @@ function createDistanceGeometry(polygon, sourcePoint) {
                 newHalfedgeOnThisFace.distanceToSource = geometry.distToSegment(face.source, newHalfedgeOnThisFace.edge) + face.distanceSum;
                 previousHalfedgeOnNewFace.distanceToSource = geometry.distToSegment(newFace.source, previousHalfedgeOnNewFace.edge) + newFace.distanceSum;
                 nextHalfedgeOnNewFace.distanceToSource = geometry.distToSegment(newFace.source, nextHalfedgeOnNewFace.edge) + newFace.distanceSum;
+                if (newHalfedgeOnThisFace.face || previousHalfedgeOnNewFace.face || nextHalfedgeOnNewFace.face) {
+                    throw new Error("Already have a face set for new edges to check")
+                    continue;
+                }
                 nextEdges.push({
                     halfedge: newHalfedgeOnThisFace,
                     referencePrevious: referencePrevious,
                     debug: "retry"
                 });
+                if (!(referencePrevious ? newHalfedgeOnThisFace.prev : newHalfedgeOnThisFace.next).face) {
+                    throw new Error("New halfedge doesn't have face reference")
+                }
                 nextEdges.push({
                     halfedge: previousHalfedgeOnNewFace,
                     referencePrevious: false,
