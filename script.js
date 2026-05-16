@@ -193,6 +193,7 @@ function createDistanceGeometry(polygon, sourcePoint) {
     const geometry = new MyGeometry(mesh, polygon, false);
 
     geometry.check(false, false)
+    sourcePoint = new Vector(sourcePoint.x, sourcePoint.y);
 
     const sourceFace = mesh.addFace();
     sourceFace.source = sourcePoint;
@@ -228,6 +229,9 @@ function createDistanceGeometry(polygon, sourcePoint) {
         console.log(geometry.printHalfedge(halfedge));
 
         if (Math.abs(angle) < 10e-4||(!referencePrevious && angle < 0) || (referencePrevious && angle > 0)) {
+            if (!geometry.checkLineOfSight(sourcePoint, halfedge.edge)) {
+                continue;
+            }
             // Source is visible for whole edge
             halfedge.face = face;
             const nextHalfedge = referencePrevious ? halfedge.next : halfedge.prev;

@@ -220,6 +220,40 @@ class MyGeometry extends Geometry {
         }
     }
 
+    checkLineOfSight(point, edge) {
+        const eps = 10e-2;
+        if (this.distToSegment(point, edge, false) < eps) {
+            return true;
+            // Line of sight cone is basically a line
+            const direction = this.positionVector(edge.halfedge.vertex).plus(this.vector(edge.halfedge).times(0.5)).minus(point);
+            for (const other_edge of this.mesh.edges) {
+                if (other_edge == edge) continue;
+                const intersection = this.intersectRayEdge(point, direction, edge);
+                if (intersection && (intersection[1] > eps && intersection[1] < 1-eps)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        const t0 = point;
+        const v = this.vector(edge.halfedge).times(eps)
+        const t1 = this.positionVector(edge.halfedge.vertex).plus(v);
+        const t2 = this.positionVector(edge.halfedge.twin.vertex).minus(v);
+
+
+        for (const other_edge of this.mesh.edges) {
+            if (other_edge == edge) continue;
+            const v2 = this.vector(other_edge.halfedge).times(eps)
+            const p1 = this.positionVector(other_edge.halfedge.vertex).plus(v2);
+            const p2 = this.positionVector(other_edge.halfedge.twin.vertex).minus(v2);
+            const result = TriangleEdgeIntersection.Intersecting(p1, p2, t0, t1, t2);
+            if (result == INTERSECTING) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     insertPointIntoEdge(point, edge) {
         const newVertex = this.mesh.insertVertexIntoEdge(edge);
         this.positions[newVertex] = point;
@@ -645,4 +679,64 @@ class MyMesh extends Mesh {
             }
         }
     }
+}
+
+
+
+const NOT_INTERSECTING = "NOT_INTERSECTING";
+const OVERLAPPING = "OVERLAPPING";
+const TOUCHING = "TOUCHING";
+const INTERSECTING = "INTERSECTING";
+const CONTAINED = "CONTAINED";
+
+class TriangleEdgeIntersection {
+    // From https://gamedev.stackexchange.com/a/21110
+    /* Check whether P and Q lie on the same side of line AB */
+    static Side(p, q, a, b)
+    {
+        const z1 = (b.x - a.x) * (p.y - a.y) - (p.x - a.x) * (b.y - a.y);
+        const z2 = (b.x - a.x) * (q.y - a.y) - (q.x - a.x) * (b.y - a.y);
+        return z1 * z2;
+    }
+
+    /* Check whether segment P0P1 intersects with triangle t0t1t2 */
+    static Intersecting(p0, p1, t0, t1, t2)
+    {
+        /* Check whether segment is outside one of the three half-planes
+        * delimited by the triangle. */
+        const f1 = TriangleEdgeIntersection.Side(p0, t2, t0, t1), f2 = TriangleEdgeIntersection.Side(p1, t2, t0, t1);
+        const f3 = TriangleEdgeIntersection.Side(p0, t0, t1, t2), f4 = TriangleEdgeIntersection.Side(p1, t0, t1, t2);
+        const f5 = TriangleEdgeIntersection.Side(p0, t1, t2, t0), f6 = TriangleEdgeIntersection.Side(p1, t1, t2, t0);
+        /* Check whether triangle is totally inside one of the two half-planes
+        * delimited by the segment. */
+        const f7 = TriangleEdgeIntersection.Side(t0, t1, p0, p1);
+        const f8 = TriangleEdgeIntersection.Side(t1, t2, p0, p1);
+
+        /* If segment is strictly outside triangle, or triangle is strictly
+        * apart from the line, we're not intersecting */
+        if ((f1 < 0 && f2 < 0) || (f3 < 0 && f4 < 0) || (f5 < 0 && f6 < 0)
+            || (f7 > 0 && f8 > 0))
+            return NOT_INTERSECTING;
+        
+        return INTERSECTING; // Treat all other cases as overlapping.
+
+        /* If segment is aligned with one of the edges, we're overlapping */
+        if ((f1 == 0 && f2 == 0) || (f3 == 0 && f4 == 0) || (f5 == 0 && f6 == 0))
+            return OVERLAPPING;
+
+        /* If segment is outside but not strictly, or triangle is apart but
+        * not strictly, we're touching */
+        if ((f1 <= 0 && f2 <= 0) || (f3 <= 0 && f4 <= 0) || (f5 <= 0 && f6 <= 0)
+            || (f7 >= 0 && f8 >= 0))
+            return TOUCHING;
+
+        /* If both segment points are strictly inside the triangle, we
+        * are not intersecting either */
+        if (f1 > 0 && f2 > 0 && f3 > 0 && f4 > 0 && f5 > 0 && f6 > 0)
+            return CONTAINED; // Changed this case to new value CONTAINED
+
+        /* Otherwise we're intersecting with at least one edge */
+        return INTERSECTING;
+    }
+    // End of https://gamedev.stackexchange.com/a/21110
 }
