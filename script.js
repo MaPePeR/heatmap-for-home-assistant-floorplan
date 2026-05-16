@@ -213,109 +213,110 @@ function createDistanceGeometry(polygon, sourcePoint) {
         {halfedge: startEdge.halfedge.prev, referencePrevious: false},
     ];
     while (nextEdges.length) {
-        // TODO: Be smarter than this...
-        nextEdges.sort((a,b) => a.halfedge.distanceToSource - b.halfedge.distanceToSource);
-        const closest = nextEdges.shift();
-        const halfedge = closest.halfedge;
-        const referencePrevious = closest.referencePrevious;
-        const vertexAlreadyVisited = referencePrevious ? halfedge.vertex : halfedge.next.vertex;
-        const newVertex = referencePrevious  ? halfedge.next.vertex : halfedge.vertex;
-        const pointAlreadyVisited = geometry.positionVector(vertexAlreadyVisited);
-        const newPoint = geometry.positionVector(newVertex);
-        const face = referencePrevious ? halfedge.prev.face : halfedge.next.face;
-        const sourcePoint = face.source;
-        const angle = geometry.smallestAngleBetweenVectors(pointAlreadyVisited.minus(sourcePoint), newPoint.minus(sourcePoint));
+        while (nextEdges.length) {
+            // TODO: Be smarter than this...
+            nextEdges.sort((a,b) => a.halfedge.distanceToSource - b.halfedge.distanceToSource);
+            const closest = nextEdges.shift();
+            const halfedge = closest.halfedge;
+            const referencePrevious = closest.referencePrevious;
+            const vertexAlreadyVisited = referencePrevious ? halfedge.vertex : halfedge.next.vertex;
+            const newVertex = referencePrevious  ? halfedge.next.vertex : halfedge.vertex;
+            const pointAlreadyVisited = geometry.positionVector(vertexAlreadyVisited);
+            const newPoint = geometry.positionVector(newVertex);
+            const face = referencePrevious ? halfedge.prev.face : halfedge.next.face;
+            const sourcePoint = face.source;
+            const angle = geometry.smallestAngleBetweenVectors(pointAlreadyVisited.minus(sourcePoint), newPoint.minus(sourcePoint));
 
-        console.log(geometry.printHalfedge(halfedge));
+            console.log(geometry.printHalfedge(halfedge));
 
-        if (Math.abs(angle) < 10e-4||(!referencePrevious && angle < 0) || (referencePrevious && angle > 0)) {
-            if (!geometry.checkLineOfSight(sourcePoint, halfedge.edge)) {
-                continue;
-            }
-            // Source is visible for whole edge
-            halfedge.face = face;
-            const nextHalfedge = referencePrevious ? halfedge.next : halfedge.prev;
-            if (!nextHalfedge.face) {
-                nextHalfedge.distanceToSource = geometry.distToSegment(face.source, nextHalfedge.edge) + face.distanceSum;
-                nextEdges.push({
-                    halfedge: nextHalfedge,
-                    referencePrevious: closest.referencePrevious,
-                })
-            }
-        } else if ((!referencePrevious && angle > 0) || (referencePrevious && angle < 0)) {
-            {
-                const prev_vector = geometry.vector((referencePrevious ? halfedge.prev : halfedge).twin);
-                const next_vector = geometry.vector(referencePrevious ? halfedge : halfedge.next);
-                const rayAngle = geometry.angleBetweenVectors(pointAlreadyVisited.minus(sourcePoint), prev_vector);
-                const cornerAngle = geometry.angleBetweenVectors(next_vector, prev_vector);
-                if (rayAngle > cornerAngle) {
-                    console.log("Intersection Ray leaves face. Ignoring")
+            if (Math.abs(angle) < 10e-4||(!referencePrevious && angle < 0) || (referencePrevious && angle > 0)) {
+                if (!geometry.checkLineOfSight(sourcePoint, halfedge.edge)) {
                     continue;
                 }
-            }
+                // Source is visible for whole edge
+                halfedge.face = face;
+                const nextHalfedge = referencePrevious ? halfedge.next : halfedge.prev;
+                if (!nextHalfedge.face) {
+                    nextHalfedge.distanceToSource = geometry.distToSegment(face.source, nextHalfedge.edge) + face.distanceSum;
+                    nextEdges.push({
+                        halfedge: nextHalfedge,
+                        referencePrevious: closest.referencePrevious,
+                    })
+                }
+            } else if ((!referencePrevious && angle > 0) || (referencePrevious && angle < 0)) {
+                {
+                    const prev_vector = geometry.vector((referencePrevious ? halfedge.prev : halfedge).twin);
+                    const next_vector = geometry.vector(referencePrevious ? halfedge : halfedge.next);
+                    const rayAngle = geometry.angleBetweenVectors(pointAlreadyVisited.minus(sourcePoint), prev_vector);
+                    const cornerAngle = geometry.angleBetweenVectors(next_vector, prev_vector);
+                    if (rayAngle > cornerAngle) {
+                        console.log("Intersection Ray leaves face. Ignoring")
+                        continue;
+                    }
+                }
 
-            const intersection = geometry.closestIntersectionEdgeWithLine(pointAlreadyVisited, pointAlreadyVisited.minus(sourcePoint))
-            console.log(intersection);
+                const intersection = geometry.closestIntersectionEdgeWithLine(pointAlreadyVisited, pointAlreadyVisited.minus(sourcePoint))
+                console.log(intersection);
 
-            if (!intersection) {
-                throw new Error("Failed to intersect");
-            }
+                if (!intersection) {
+                    throw new Error("Failed to intersect");
+                }
 
-            const splitPointDistanceToVertex = geometry.length(intersection.edge) * Math.min(intersection.ratio, 1-intersection.ratio)
-            let newEdgeTo;
-            if (splitPointDistanceToVertex < 2/1000) {
-                console.log("Intersection very close");
-                newEdgeTo = intersection.ratio < 0.5 ? intersection.edge.halfedge : intersection.edge.halfedge.next;
+                const splitPointDistanceToVertex = geometry.length(intersection.edge) * Math.min(intersection.ratio, 1-intersection.ratio)
+                let newEdgeTo;
+                if (splitPointDistanceToVertex < 2/1000) {
+                    console.log("Intersection very close");
+                    newEdgeTo = intersection.ratio < 0.5 ? intersection.edge.halfedge : intersection.edge.halfedge.next;
+                } else {
+                    geometry.insertPointIntoEdge(intersection.point, intersection.edge)
+                    newEdgeTo = intersection.edge.halfedge.next;
+                }
+                const newEdgeFrom = referencePrevious ? halfedge.prev : halfedge;
+                const newHalfedge = geometry.mesh.addEdgeConnectingHalfedges(newEdgeFrom, newEdgeTo)
+                console.log(geometry.printAllHalfedges())
+                //geometry.check(false, false)
+
+                nextEdges = nextEdges.filter((c) => c.halfedge.edge !== intersection.edge)
+
+                const newFace = geometry.mesh.addFace();
+                newFace.source = pointAlreadyVisited;
+                newFace.distanceSum = face.distanceSum + pointAlreadyVisited.minus(sourcePoint).norm();
+                newFace.halfedge = newHalfedge;
+
+                if (referencePrevious) {
+                    newHalfedge.twin.face = newFace;
+                    newHalfedge.twin.next.face = newFace;
+                } else {
+                    newHalfedge.face = newFace;
+                    newHalfedge.prev.face = newFace;
+                }
+
+                const newHalfedgeOnThisFace = referencePrevious ? newHalfedge : newHalfedge.twin;
+                const previousHalfedgeOnNewFace = referencePrevious ? newHalfedge.twin.prev : newHalfedge.prev.prev;
+                const nextHalfedgeOnNewFace = referencePrevious ? newHalfedge.twin.next.next : newHalfedge.next
+
+                newHalfedgeOnThisFace.distanceToSource = geometry.distToSegment(face.source, newHalfedgeOnThisFace.edge) + face.distanceSum;
+                previousHalfedgeOnNewFace.distanceToSource = geometry.distToSegment(newFace.source, previousHalfedgeOnNewFace.edge) + newFace.distanceSum;
+                nextHalfedgeOnNewFace.distanceToSource = geometry.distToSegment(newFace.source, nextHalfedgeOnNewFace.edge) + newFace.distanceSum;
+                nextEdges.push({
+                    halfedge: newHalfedgeOnThisFace,
+                    referencePrevious: referencePrevious,
+                    debug: "retry"
+                });
+                nextEdges.push({
+                    halfedge: previousHalfedgeOnNewFace,
+                    referencePrevious: false,
+                    debug: "new_face_prev"
+                });
+                nextEdges.push({
+                    halfedge: nextHalfedgeOnNewFace,
+                    referencePrevious: true,
+                    debug: "new_face_next"
+                });
             } else {
-                geometry.insertPointIntoEdge(intersection.point, intersection.edge)
-                newEdgeTo = intersection.edge.halfedge.next;
+                throw new Error("unreachable");
             }
-            const newEdgeFrom = referencePrevious ? halfedge.prev : halfedge;
-            const newHalfedge = geometry.mesh.addEdgeConnectingHalfedges(newEdgeFrom, newEdgeTo)
-            console.log(geometry.printAllHalfedges())
-            //geometry.check(false, false)
-
-            nextEdges = nextEdges.filter((c) => c.halfedge.edge !== intersection.edge)
-
-            const newFace = geometry.mesh.addFace();
-            newFace.source = pointAlreadyVisited;
-            newFace.distanceSum = face.distanceSum + pointAlreadyVisited.minus(sourcePoint).norm();
-            newFace.halfedge = newHalfedge;
-
-            if (referencePrevious) {
-                newHalfedge.twin.face = newFace;
-                newHalfedge.twin.next.face = newFace;
-            } else {
-                newHalfedge.face = newFace;
-                newHalfedge.prev.face = newFace;
-            }
-
-            const newHalfedgeOnThisFace = referencePrevious ? newHalfedge : newHalfedge.twin;
-            const previousHalfedgeOnNewFace = referencePrevious ? newHalfedge.twin.prev : newHalfedge.prev.prev;
-            const nextHalfedgeOnNewFace = referencePrevious ? newHalfedge.twin.next.next : newHalfedge.next
-
-            newHalfedgeOnThisFace.distanceToSource = geometry.distToSegment(face.source, newHalfedgeOnThisFace.edge) + face.distanceSum;
-            previousHalfedgeOnNewFace.distanceToSource = geometry.distToSegment(newFace.source, previousHalfedgeOnNewFace.edge) + newFace.distanceSum;
-            nextHalfedgeOnNewFace.distanceToSource = geometry.distToSegment(newFace.source, nextHalfedgeOnNewFace.edge) + newFace.distanceSum;
-            nextEdges.push({
-                halfedge: newHalfedgeOnThisFace,
-                referencePrevious: referencePrevious,
-                debug: "retry"
-            });
-            nextEdges.push({
-                halfedge: previousHalfedgeOnNewFace,
-                referencePrevious: false,
-                debug: "new_face_prev"
-            });
-            nextEdges.push({
-                halfedge: nextHalfedgeOnNewFace,
-                referencePrevious: true,
-                debug: "new_face_next"
-            });
-        } else {
-            throw new Error("unreachable");
         }
-
     }
 
     return geometry;
