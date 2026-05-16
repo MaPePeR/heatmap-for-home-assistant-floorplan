@@ -78,14 +78,18 @@ class MyGeometry extends Geometry {
         this.mesh.check(triangular, face);
         let cwCount = 0;
         let ccwCount = 0;
-        for (const halfedge of this.mesh.halfedges) {
-            if (halfedge.onBoundary) continue;
-            if (!halfedge.face) continue;
-            const c = this.centroid(halfedge.face);
-            const angle = this.smallestAngleBetweenVectors(this.positionVector(halfedge.vertex).minus(c), this.positionVector(halfedge.next.vertex).minus(c))
-            if (angle < 0) {
-                console.log("halfedge next is clockwise instead of counterclockwise", halfedge)
-                cwCount += 1
+        for (const face of this.mesh.faces) {
+            let halfedge = face.halfedge;
+            let sum = 0;
+            do {
+                const p = this.positionVector(halfedge.vertex);
+                const next = this.positionVector(halfedge.next.vertex);
+                sum += (next.x - p.x) * (next.y + p.y);
+                halfedge = halfedge.next;
+            } while (halfedge != face.halfedge);
+            if (sum > 0) {
+                cwCount += 1;
+                console.log("face is clockwise and not counterclockwise", face)
             } else {
                 ccwCount +=1;
             }
@@ -677,6 +681,13 @@ class MyMesh extends Mesh {
             if (triangular && face.halfedge.next.next.next !== face.halfedge) {
                 console.log("Face has more than 3 vertices");
             }
+            let halfedge = face.halfedge;
+            do {
+                if (halfedge.face && halfedge.face != face) {
+                    console.log("Halfedges in Face-Loop reference differrent face");
+                }
+                halfedge = halfedge.next;
+            } while(halfedge != face.halfedge);
         }
     }
 }
