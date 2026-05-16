@@ -212,6 +212,7 @@ function createDistanceGeometry(polygon, sourcePoint) {
         {halfedge: startEdge.halfedge.next, referencePrevious: true},
         {halfedge: startEdge.halfedge.prev, referencePrevious: false},
     ];
+    const bailedEdges = [];
     while (nextEdges.length) {
         while (nextEdges.length) {
             // TODO: Be smarter than this...
@@ -231,6 +232,7 @@ function createDistanceGeometry(polygon, sourcePoint) {
 
             if (Math.abs(angle) < 10e-4||(!referencePrevious && angle < 0) || (referencePrevious && angle > 0)) {
                 if (!geometry.checkLineOfSight(sourcePoint, halfedge.edge)) {
+                    bailedEdges.push(closest);
                     continue;
                 }
                 // Source is visible for whole edge
@@ -316,6 +318,28 @@ function createDistanceGeometry(polygon, sourcePoint) {
             } else {
                 throw new Error("unreachable");
             }
+        }
+        for(let bailed; bailed = bailedEdges.shift();) {
+            const face = referencePrevious ? halfedge.prev.face : halfedge.next.face;
+            const sourcePoint = face.source;
+            let halfedge = bailed.halfedge;
+            do {
+                halfedge = bailed.referencePrevious ? halfedge.next : halfedge.prev
+            } while (!halfedge.face && !geometry.checkLineOfSight(sourcePoint, halfedge.edge));
+            if (halfedge.face) {
+                continue;
+            }
+            halfedge.face = face;
+            halfedge.distanceToSource = geometry.distToSegment(face.source, halfedge.edge) + face.distanceSum;
+            nextEdges.push({
+                halfedge: halfedge.next,
+                referencePrevious: true,
+            })
+
+            nextEdges.push({
+                halfedge: halfedge.prev,
+                referencePrevious: false,
+            })
         }
     }
 
