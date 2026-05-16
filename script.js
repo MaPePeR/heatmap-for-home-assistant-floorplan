@@ -159,33 +159,64 @@ class Area {
 
     getTextureData(sensor) {
         const geometry = createDistanceGeometry(this.polygon, this.convertCoords.transformPoint(getCenterOfElement(sensor)));
-        /*
         const mesh = geometry.mesh;
-        const buffer = new ArrayBuffer(16/8 + mesh.vertices.length * 2 * 16/8 + mesh.faces.length * 3 * 16 / 8)
+        
+        const faceVertexCounts = new Array(mesh.faces.length);
+        const faceVertices = new Array()
+        for(let i = 0; i < mesh.faces.length; i++) {
+            const face = mesh.faces[i];
+            let count = 0;
+            let halfedge = face.halfedge;
+            do {
+                count += 1;
+                faceVertices.push(halfedge.vertex.index);
+                halfedge = halfedge.next;
+            } while (halfedge != face.halfedge);
+            faceVertexCounts[i] = count;
+        }
+        const buffer = new ArrayBuffer(0
+            + 16/8                            // Uint16 1        Total Vertex Count
+            + 16/8                            // Uint16 1        Total Face Count N_f
+            + 32/8 * 3 * mesh.faces.length    // Float32 3*N_f   {sourceX, sourceY, sourceDistance}
+            + 16/8 * mesh.faces.length        // Uint16 N_f      Vertex Count for face
+            + 16/8 * 2 * mesh.vertices.length // Float16 2*N_v   {vertexX, vertexY}
+            + 16/8 * faceVertices.length      // Uint16 Sum(N_h) All vertex indices of faces 1..N_f
+        )
+        // Had to move the source vectors up, so they are 4-byte aligned.
+        
         const view = new DataView(buffer)
         let pos = 0;
+        
         view.setUint16(pos, mesh.vertices.length)
         pos += 16/8;
+        
+        view.setUint16(pos, mesh.faces.length);
+        pos += 16/8;
+
+        const face_source = new Float32Array(buffer, pos, 3 * mesh.faces.length);
+        for (let i = 0; i < mesh.faces.length; i++) {
+            const face = mesh.faces[i];
+            face_source[i * 3 + 0] = face.source.x;
+            face_source[i * 3 + 1] = face.source.y;
+            face_source[i * 3 + 2] = face.distanceSum;
+        }
+        pos += 32/8 * 3 * mesh.faces.length;
+
+        new Uint16Array(buffer, pos, mesh.faces.length).set(faceVertexCounts);
+        pos += 16/8 * mesh.faces.length;
+
         const v_buffer = new Float16Array(buffer, pos, mesh.vertices.length * 2)
-        pos += mesh.vertices.length * 2 * 16 / 8;
         for(let i = 0; i < mesh.vertices.length; i += 1) {
-            const v = this.geometry.positions[mesh.vertices[i].index];
+            const v = geometry.positionVector(mesh.vertices[i]);
             v_buffer[i * 2+0] = v.x;
             v_buffer[i * 2+1] = v.y;
         }
+        pos += 16/8 * mesh.vertices.length * 2;
 
-        const f_buffer = new Uint16Array(buffer, pos, mesh.faces.length * 3);
-        console.log(f_buffer)
-        for(let i = 0; i < mesh.faces.length; i++) {
-            const face = mesh.faces[i];
-            f_buffer[i*3 + 0] = face.halfedge.vertex.index;
-            f_buffer[i*3 + 1] = face.halfedge.next.vertex.index;
-            f_buffer[i*3 + 2] = face.halfedge.next.next.vertex.index;
-        }
+        new Uint16Array(buffer, pos, faceVertices.length).set(faceVertices);
+        pos += 16/8 * faceVertices.length;
 
         return (new Uint8Array(buffer)).toBase64();
-        */
-       return "";
     }
 }
 
