@@ -326,6 +326,20 @@ function createDistanceGeometry(polygon, sourcePoint) {
                     newEdgeTo = intersection.edge.halfedge.next;
                 }
                 const newEdgeFrom = referencePrevious ? halfedge.prev : halfedge;
+                if (newEdgeFrom == newEdgeTo || newEdgeFrom.next == newEdgeTo || newEdgeFrom.next.next == newEdgeTo) {
+                    console.log("Trying to connect halfedge to itself")
+                    halfedge.face = face;
+                    const nextHalfedge = referencePrevious ? halfedge.next : halfedge.prev;
+                    if (!nextHalfedge.face) {
+                        nextHalfedge.distanceToSource = geometry.distToSegment(face.source, nextHalfedge.edge) + face.distanceSum;
+                        nextEdges.push({
+                            halfedge: nextHalfedge,
+                            referencePrevious: closest.referencePrevious,
+                        })
+                    }
+                    continue;
+                }
+                
                 const newHalfedge = geometry.mesh.addEdgeConnectingHalfedges(newEdgeFrom, newEdgeTo)
                 console.log(geometry.printAllHalfedges())
                 //geometry.check(false, false)
