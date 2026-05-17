@@ -58,7 +58,7 @@ function generateDistances() {
     const canvasBBox = canvas.parentNode.getBBox();
 
     const scale = 1 / Math.max(canvasBBox.width, canvasBBox.height)
-    const resolution = [1 / (canvasBBox.width * scale), 1 / (canvasBBox.height * scale)];
+    const resolution = new Vector(1 / (canvasBBox.width * scale), 1 / (canvasBBox.height * scale));
     console.log(resolution)
     
     // Applies in reverse order...
@@ -73,7 +73,8 @@ function generateDistances() {
     console.log(convertCoords)
 
     const results = {
-        scale: resolution,
+        scaleX: resolution.x,
+        scaleY: resolution.y,
         areas: {}
     };
     try {

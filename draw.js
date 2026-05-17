@@ -194,7 +194,7 @@ class Renderer {
     constructor(data, canvas) {
         this.canvas = canvas;
         this.ctx = canvas.getContext("webgl2");
-        this.scale = new Float32Array(data.scale);
+        this.scale = new Float32Array([data.scaleX, data.scaleY]);
         
         if (!this.ctx) {
             throw new Error("Couldn't get WebGL2 Context");
