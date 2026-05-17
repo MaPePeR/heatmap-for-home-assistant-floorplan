@@ -141,7 +141,17 @@ function earcutFace(vertexPositions, indices) {
 
 let renderer = null;
 function createRenderer(data) {
-    const canvas = document.querySelector('foreignObject > canvas.ha-fp-hm');
+    const canvasRect = document.querySelector('rect.ha-fp-hm');
+    const foreignObjectEl = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+    const canvas = document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
+    foreignObjectEl.appendChild(canvas);
+    foreignObjectEl.setAttribute("x", canvasRect.getAttribute("x"))
+    foreignObjectEl.setAttribute("y", canvasRect.getAttribute("y"))
+    foreignObjectEl.setAttribute("width", canvasRect.getAttribute("width"))
+    foreignObjectEl.setAttribute("height", canvasRect.getAttribute("height"))
+    // Insert foreignObject after rect
+    canvasRect.parentNode.insertBefore(foreignObjectEl, canvasRect.nextSibling);
+    canvas.setAttribute("style","width: 100%; height: 100%;");
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
     renderer = new Renderer(data, canvas);

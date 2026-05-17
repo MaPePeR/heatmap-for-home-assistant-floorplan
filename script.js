@@ -30,12 +30,12 @@ function generateDistances() {
     if (!sensors || !areas) {
         return
     }
-    const canvases = floorplancontainer.querySelectorAll('foreignObject > canvas.ha-fp-hm');
-    if (canvases.length != 1) {
-        errorcontainer.innerText += "Cannot find exactly one 'foreignObject > canvas.ha-fp-hm' in floorplan";
+    const canvasRects = floorplancontainer.querySelectorAll('rect.ha-fp-hm');
+    if (canvasRects.length != 1) {
+        errorcontainer.innerText += "Cannot find exactly one 'rect.ha-fp-hm' in floorplan";
         return
     }
-    const canvas = canvases[0];
+    const canvasRect = canvasRects[0];
     let missingId = false;
     for (const area of areas) {
         if (!area.id) {
@@ -54,8 +54,8 @@ function generateDistances() {
     }
 
     
-    const screen2canvas = canvas.parentNode.getScreenCTM().inverse();
-    const canvasBBox = canvas.parentNode.getBBox();
+    const screen2canvas = canvasRect.getScreenCTM().inverse();
+    const canvasBBox = canvasRect.getBBox();
 
     const scale = 1 / Math.max(canvasBBox.width, canvasBBox.height)
     const resolution = new Vector(1 / (canvasBBox.width * scale), 1 / (canvasBBox.height * scale));
