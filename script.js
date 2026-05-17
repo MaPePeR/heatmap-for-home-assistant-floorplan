@@ -80,6 +80,7 @@ function generateDistances() {
     const results = {
         scaleX: resolution.x,
         scaleY: resolution.y,
+        maxDistance: 0,
         areas: {}
     };
     try {
@@ -90,7 +91,9 @@ function generateDistances() {
             const result = {};
             
             sensorPoints.forEach((sensorPoint, sensorId) => {
-                result[sensorId] = area_data.getTextureData(sensorPoint);
+                const [texture, maxDistance] = area_data.getTextureData(sensorPoint);
+                result[sensorId] = texture;
+                results.maxDistance = Math.max(maxDistance, results.maxDistance)
             });
             results.areas[area.id] = result
         }
@@ -229,7 +232,12 @@ class Area {
         new Uint16Array(buffer, pos, faceVertices.length).set(faceVertices);
         pos += 16/8 * faceVertices.length;
 
-        return (new Uint8Array(buffer)).toBase64();
+        let maxDistance = 0;
+        for (const halfedge of geometry.mesh.halfedges) {
+            maxDistance = Math.max(maxDistance, halfedge.distanceToSource || 0);
+        }
+
+        return [(new Uint8Array(buffer)).toBase64(), maxDistance];
     }
 }
 

@@ -24,11 +24,12 @@ precision highp float;
 in vec3 v_distance;
 in vec2 v_pos;
 out vec4 outColor;
+uniform float u_maxDistance;
 
 void main() {
     if (v_distance.z >= 0.0) {
         vec2 d = v_pos - v_distance.xy;
-        float l = 0.5 * (length(d) + v_distance.z);
+        float l = (length(d) + v_distance.z) / u_maxDistance;
         //float l = v_distance.z;
         //float l = dot(d,d);
         //float l = length(d);
@@ -205,6 +206,7 @@ class Renderer {
         this.canvas = canvas;
         this.ctx = canvas.getContext("webgl2");
         this.scale = new Float32Array([data.scaleX, data.scaleY]);
+        this.maxDistance = data.maxDistance;
         
         if (!this.ctx) {
             throw new Error("Couldn't get WebGL2 Context");
@@ -226,7 +228,7 @@ class Renderer {
             SPACE_TRANSFORM_VERTEX_SHADER,
             BASIC_FRAGMENT_SHADER,
             ['a_position', 'a_distance'],
-            ['u_scale'],
+            ['u_scale', 'u_maxDistance'],
         )
 
         this.setupVertexArrayObjects(data);
@@ -304,6 +306,9 @@ class Renderer {
 
             const scaleUniform = this.renderTexProgram.uniforms.get('u_scale');
             ctx.uniform2fv(scaleUniform, this.scale);
+
+            const maxDistanceUniform = this.renderTexProgram.uniforms.get('u_maxDistance');
+            ctx.uniform1f(maxDistanceUniform, this.maxDistance);
 
             //const sensorId = "path2";
             const sensorId = this.sensorRenderData.keys().next().value
