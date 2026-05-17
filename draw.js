@@ -7,10 +7,12 @@ in vec2 a_position;
 in vec3 a_distance;
 out vec3 v_distance;
 out vec2 v_pos;
+uniform vec2 u_scale;
 
 
 void main() {
-    gl_Position = vec4(a_position, 0, 1);
+    vec2 scaled = (a_position * vec2(2.0, 2.0) * u_scale - vec2(1.0, 1.0)) * vec2(1, -1);
+    gl_Position = vec4(scaled.xy, 0, 1);
     v_pos = a_position;
     v_distance = a_distance;
 }
@@ -192,6 +194,7 @@ class Renderer {
     constructor(data, canvas) {
         this.canvas = canvas;
         this.ctx = canvas.getContext("webgl2");
+        this.scale = new Float32Array(data.scale);
         
         if (!this.ctx) {
             throw new Error("Couldn't get WebGL2 Context");
@@ -213,7 +216,7 @@ class Renderer {
             SPACE_TRANSFORM_VERTEX_SHADER,
             BASIC_FRAGMENT_SHADER,
             ['a_position', 'a_distance'],
-            [],
+            ['u_scale'],
         )
 
         this.setupVertexArrayObjects(data);
@@ -225,19 +228,20 @@ class Renderer {
         this.sensorRenderData = new Map();
 
         const sensorMap = new Map();
-        for (let areaId in data) {
-            if (!Object.hasOwnProperty.call(data, areaId)) {
+        for (let areaId in data.areas) {
+            if (!Object.hasOwnProperty.call(data.areas, areaId)) {
                 continue;
             }
-            const area_data = data[areaId];
-            for (const sensorId in data[areaId]) {
-                if (!Object.hasOwnProperty.call(data[areaId], sensorId)) {
+            const area_data = data.areas[areaId];
+            for (const sensorId in area_data) {
+                if (!Object.hasOwnProperty.call(area_data, sensorId)) {
                     continue;
                 }
                 const sensorData = area_data[sensorId];
                 sensorMap.set(sensorId, readSensorData(sensorData));
             }
         }
+        console.log(sensorMap);
 
         const ctx = this.ctx;
         const positionAttrib = this.renderTexProgram.attributes.get("a_position");
@@ -287,6 +291,9 @@ class Renderer {
             ctx.clear(ctx.COLOR_BUFFER_BIT);
             
             ctx.useProgram(this.renderTexProgram.prog)
+
+            const scaleUniform = this.renderTexProgram.uniforms.get('u_scale');
+            ctx.uniform2fv(scaleUniform, this.scale);
 
             //const sensorId = "path2";
             const sensorId = this.sensorRenderData.keys().next().value

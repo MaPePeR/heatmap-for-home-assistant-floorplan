@@ -52,15 +52,44 @@ function generateDistances() {
     if (missingId) {
         return;
     }
-    const results = {};
+
+    
+    const screen2canvas = canvas.parentNode.getScreenCTM().inverse();
+    const canvasBBox = canvas.parentNode.getBBox();
+
+    const scale = 1 / Math.max(canvasBBox.width, canvasBBox.height)
+    const resolution = [1 / (canvasBBox.width * scale), 1 / (canvasBBox.height * scale)];
+    console.log(resolution)
+    
+    // Applies in reverse order...
+    const convertCoords = new DOMMatrix()
+        //.flipY()
+        //.translate(-1, -1)
+        //.scale(2, 2)
+        .scale(scale, scale)
+        .translate(-canvasBBox.x, -canvasBBox.y)
+        .multiply(screen2canvas);
+
+    console.log(convertCoords)
+
+    const results = {
+        scale: resolution,
+        areas: {}
+    };
     try {
         for (const area of areas) {
-            const area_data = new Area(area, sensors, canvas)
+            const area2screen = area.getScreenCTM();
+            const polygon = getPolygon(area, convertCoords.multiply(area2screen));
+            const area_data = new Area(polygon)
             const result = {};
+            
             for (const sensor of sensors) {
-                result[sensor.id] = area_data.getTextureData(sensor);
+                const sensor2screen = sensor.getScreenCTM();
+                result[sensor.id] = area_data.getTextureData(
+                    convertCoords.multiply(sensor2screen).transformPoint(getCenterOfElement(sensor))
+                );
             }
-            results[area.id] = result
+            results.areas[area.id] = result
         }
         console.log(results)
         resultcontainer.innerText = JSON.stringify(results, null, "  ");
@@ -134,29 +163,12 @@ function vertexInTriangle(pt, v1, v2, v3) {
 }
 
 class Area {
-    constructor(area, sensors, canvas) {
-
-
-        const area2screen = area.getScreenCTM();
-        const screen2canvas = canvas.parentNode.getScreenCTM().inverse();
-        const canvasBBox = canvas.parentNode.getBBox();
-        
-        // Applies in reverse order...
-        this.convertCoords = new DOMMatrix()
-            .flipY()
-            .translate(-1, -1)
-            .scale(2/canvasBBox.width, 2/canvasBBox.height)
-            .translate(-canvasBBox.x, -canvasBBox.y)
-            .multiply(screen2canvas)
-            .multiply(area2screen);
-
-        console.log(this.convertCoords)
-
-        this.polygon = getPolygon(area, this.convertCoords);
+    constructor(polygon) {
+        this.polygon = polygon;
     }
 
-    getTextureData(sensor) {
-        const geometry = createDistanceGeometry(this.polygon, this.convertCoords.transformPoint(getCenterOfElement(sensor)));
+    getTextureData(sensorPosition) {
+        const geometry = createDistanceGeometry(this.polygon, sensorPosition);
         const mesh = geometry.mesh;
         
         const faceVertexCounts = new Array(mesh.faces.length);
