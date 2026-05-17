@@ -72,6 +72,11 @@ function generateDistances() {
 
     console.log(convertCoords)
 
+    const sensorPoints = new Map(Array.from(sensors).map((sensor) => {
+        const sensor2screen = sensor.getScreenCTM();
+        return [sensor.id, convertCoords.multiply(sensor2screen).transformPoint(getCenterOfElement(sensor))];
+    }));
+
     const results = {
         scaleX: resolution.x,
         scaleY: resolution.y,
@@ -84,12 +89,9 @@ function generateDistances() {
             const area_data = new Area(polygon)
             const result = {};
             
-            for (const sensor of sensors) {
-                const sensor2screen = sensor.getScreenCTM();
-                result[sensor.id] = area_data.getTextureData(
-                    convertCoords.multiply(sensor2screen).transformPoint(getCenterOfElement(sensor))
-                );
-            }
+            sensorPoints.forEach((sensorPoint, sensorId) => {
+                result[sensorId] = area_data.getTextureData(sensorPoint);
+            });
             results.areas[area.id] = result
         }
         console.log(results)
