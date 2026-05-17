@@ -1,7 +1,7 @@
 // Copyright 2026 MaPePeR
 // SPDX-License-Identifier: AGPL-3.0-only
 
-const SPACE_TRANSFORM_VERTEX_SHADER = `#version 300 es
+const IDW_VERTEX_SHADER = `#version 300 es
 
 in vec2 a_position;
 in vec3 a_distance;
@@ -18,30 +18,52 @@ void main() {
 }
 `;
 
-const BASIC_FRAGMENT_SHADER = `#version 300 es
+const IDW_FRAGMENT_SHADER = `#version 300 es
 
 precision highp float;
 in vec3 v_distance;
 in vec2 v_pos;
-out vec4 outColor;
+out float outColor;
 uniform float u_maxDistance;
+uniform float u_sensorValue;
 
 void main() {
-    if (v_distance.z >= 0.0) {
-        vec2 d = v_pos - v_distance.xy;
-        float l = (length(d) + v_distance.z) / u_maxDistance;
-        //float l = v_distance.z;
-        //float l = dot(d,d);
-        //float l = length(d);
-        l = clamp(l, 0.0, 1.0);
-        outColor = vec4(1, l, l , 1);
-        //outColor = vec4(0, 0, v_pos.y,1);
-    } else {
-        outColor = vec4(1,1,0,1);
-    }
-        
+    vec2 d = v_pos - v_distance.xy;
+    float l = (length(d) + v_distance.z) / u_maxDistance;
+    float v = u_sensorValue / (l * l);
+    outColor = v;
 }
 `;
+
+const COLORIZE_VERTEX_SHADER = `#version 300 es
+
+in vec2 a_position;
+out vec2 v_pos;
+uniform vec2 u_scale;
+
+
+void main() {
+    vec2 scaled = (a_position * vec2(2.0, 2.0) * u_scale - vec2(1.0, 1.0)) * vec2(1, -1);
+    gl_Position = vec4(scaled.xy, 0, 1);
+    v_pos = a_position;
+}
+`;
+
+const COLORIZE_FRAGMENT_SHADER = `#version 300 es
+
+precision highp float;
+
+in vec2 v_pos;
+out vec4 outColor;
+uniform sampler2D u_value;
+uniform sampler2D u_denom;
+
+void main() {
+    float v = texture(u_value, v_pos).r;
+    float d = texture(u_denom, v_pos).r;
+    outColor = vec4(v/d, 0, 0, 1);
+}
+`
 
 function readTex(tex) {
     const buffer = Uint8Array.fromBase64(tex).buffer
@@ -207,6 +229,15 @@ class Renderer {
         this.ctx = canvas.getContext("webgl2");
         this.scale = new Float32Array([data.scaleX, data.scaleY]);
         this.maxDistance = data.maxDistance;
+        this.vaos = new Map();
+        this.sensorRenderData = new Map();
+        this.sensorValues = new Map();
+        this.redoDenominatorTexture = true;
+        this.valueTexture = null;
+        this.denomTexture = null;
+
+        this.valueFrameBuffer = null;
+        this.denomFrameBuffer = null;
         
         if (!this.ctx) {
             throw new Error("Couldn't get WebGL2 Context");
@@ -225,19 +256,27 @@ class Renderer {
 
         this.renderTexProgram = createProgram(
             this.ctx,
-            SPACE_TRANSFORM_VERTEX_SHADER,
-            BASIC_FRAGMENT_SHADER,
+            IDW_VERTEX_SHADER,
+            IDW_FRAGMENT_SHADER,
             ['a_position', 'a_distance'],
-            ['u_scale', 'u_maxDistance'],
+            ['u_scale', 'u_maxDistance', 'u_sensorValue'],
+        )
+
+        this.colorizeProgram = createProgram(
+            this.ctx,
+            COLORIZE_VERTEX_SHADER,
+            COLORIZE_FRAGMENT_SHADER,
+            ['a_position'],
+            ['u_value', 'u_denom'],
         )
 
         this.setupVertexArrayObjects(data);
+        const sensorId = this.sensorRenderData.keys().next().value
+        this.setSensorValue(sensorId, 1.5);
         this.render();
     }
 
     setupVertexArrayObjects(data) {
-        this.vaos = new Map();
-        this.sensorRenderData = new Map();
 
         const sensorMap = new Map();
         for (let areaId in data.areas) {
@@ -290,18 +329,91 @@ class Renderer {
         
     }
 
+    setSensorValue(sensorId, value) {
+        if (!this.sensorRenderData.has(sensorId)) {
+            throw new Error("Unknown sensor id");
+        }
+        if (!this.sensorValues.has(sensorId)) {
+            this.redoDenominatorTexture = true;
+        }
+        this.sensorValues.set(sensorId, value);
+    }
+
+    setupTextures(width, height) {
+        if (this.nTexture) {
+            this.ctx.deleteTexture(this.nTexture);
+        }
+        if (this.dTexture) {
+            this.ctx.deleteTexture(this.dTexture);
+        }
+
+        // use texture unit 0
+        this.ctx.activeTexture(this.ctx.TEXTURE0 + 0);
+
+        const createTextureAndAttachToFB = (fb) => {
+            const texture = this.ctx.createTexture();
+
+            // bind to the TEXTURE_2D bind point of texture unit 0
+            this.ctx.bindTexture(this.ctx.TEXTURE_2D, texture);
+
+            // define size and format of level 0
+            const txLevel = 0;
+            const internalFormat = this.ctx.RGBA;
+            const border = 0;
+            const format = this.ctx.RGBA;
+            const type = this.ctx.UNSIGNED_BYTE;
+            const data = null;
+            this.ctx.texImage2D(this.ctx.TEXTURE_2D, txLevel, internalFormat,
+                            width, height, border,
+                            format, type, data);
+        
+            // set the filtering so we don't need mips
+            this.ctx.texParameteri(this.ctx.TEXTURE_2D, this.ctx.TEXTURE_MIN_FILTER, this.ctx.LINEAR);
+            this.ctx.texParameteri(this.ctx.TEXTURE_2D, this.ctx.TEXTURE_WRAP_S, this.ctx.CLAMP_TO_EDGE);
+            this.ctx.texParameteri(this.ctx.TEXTURE_2D, this.ctx.TEXTURE_WRAP_T, this.ctx.CLAMP_TO_EDGE);
+
+            this.ctx.bindFramebuffer(this.ctx.FRAMEBUFFER, fb);
+
+            // attach the texture as the first color attachment
+            const attachmentPoint = this.ctx.COLOR_ATTACHMENT0;
+            const fbLevel = 0;
+            this.ctx.framebufferTexture2D(this.ctx.FRAMEBUFFER, attachmentPoint, this.ctx.TEXTURE_2D, texture, fbLevel);
+
+            this.ctx.bindFramebuffer(this.ctx.FRAMEBUFFER, null);
+
+            return texture;
+        }
+
+        if (!this.valueFrameBuffer) {
+            this.valueFrameBuffer = this.ctx.createFramebuffer();
+        }
+        if (!this.denomFrameBuffer) {
+            this.denomFrameBuffer = this.ctx.createFramebuffer();
+        }
+
+        this.denomTexture = createTextureAndAttachToFB(this.denomFrameBuffer);
+        this.valueTexture = createTextureAndAttachToFB(this.valueFrameBuffer);
+    }
+
     render() {
+        if (this.sensorValues.size == 0) {
+            return;
+        }
         requestAnimationFrame(() => {
             const ctx = this.ctx;
             const rect = this.canvas.getBoundingClientRect()
+            
+            rect.width = Math.floor(rect.width)
+            rect.height = Math.floor(rect.height)
+
             if (this.canvas.width != rect.width || this.canvas.height != rect.height) {
+                console.log(`Resizing canvas from ${this.canvas.width}, ${this.canvas.height} to ${rect.width}, ${rect.height}`);
                 this.canvas.width = rect.width;
                 this.canvas.height = rect.height;
+                this.setupTextures(rect.width, rect.height);
+                this.redoDenominatorTexture = true;
             }
-            ctx.viewport(0, 0, ctx.canvas.width, ctx.canvas.height);
-            ctx.clearColor(0,0,0,0);
-            ctx.clear(ctx.COLOR_BUFFER_BIT);
-            
+
             ctx.useProgram(this.renderTexProgram.prog)
 
             const scaleUniform = this.renderTexProgram.uniforms.get('u_scale');
@@ -310,12 +422,54 @@ class Renderer {
             const maxDistanceUniform = this.renderTexProgram.uniforms.get('u_maxDistance');
             ctx.uniform1f(maxDistanceUniform, this.maxDistance);
 
-            //const sensorId = "path2";
-            const sensorId = this.sensorRenderData.keys().next().value
-            ctx.bindVertexArray(this.vaos.get(sensorId));
-            const vertexCount = this.sensorRenderData.get(sensorId).vertexCount
-            console.log("Drawing ", sensorId, vertexCount);
-            ctx.drawArrays(ctx.TRIANGLES, 0, vertexCount);
+            ctx.enable(ctx.BLEND);
+            ctx.blendFunc(ctx.ONE, ctx.ONE);
+
+            if (this.redoDenominatorTexture) {
+                this.redoDenominatorTexture = false;
+
+                ctx.bindFramebuffer(ctx.FRAMEBUFFER, this.denomFrameBuffer);
+
+                ctx.viewport(0, 0, ctx.canvas.width, ctx.canvas.height);
+                ctx.clearColor(0,0,0,0);
+                ctx.clear(ctx.COLOR_BUFFER_BIT);
+
+                this.sensorValues.forEach((_, sensorId) => {
+                    this.drawSensorWithValue(1, sensorId);
+                })
+
+            }
+
+            ctx.bindFramebuffer(ctx.FRAMEBUFFER, this.valueFrameBuffer);
+            ctx.viewport(0, 0, ctx.canvas.width, ctx.canvas.height);
+            ctx.clearColor(0,0,0,0);
+            ctx.clear(ctx.COLOR_BUFFER_BIT);
+
+            this.sensorValues.forEach((sensorValue, sensorId) => {
+                this.drawSensorWithValue(sensorValue, sensorId);
+            });
+
+            ctx.bindFramebuffer(ctx.FRAMEBUFFER, null);
+            
+
+            this.sensorValues.forEach((sensorValue, sensorId) => {
+                this.drawSensorWithValue(sensorValue, sensorId);
+            });
+
+            ctx.disable(ctx.BLEND);
+
+            // TODO: Use sensor with minimum vertices for each area
+            // TODO: Use separate shader to calcualte valueTexture / denomTexture and apply colormap
         })
+    }
+
+    drawSensorWithValue(sensorValue, sensorId) {
+        const sensorValueUniform = this.renderTexProgram.uniforms.get('u_sensorValue');
+        this.ctx.uniform1f(sensorValueUniform, sensorValue);
+
+        this.ctx.bindVertexArray(this.vaos.get(sensorId));
+        const vertexCount = this.sensorRenderData.get(sensorId).vertexCount
+        console.log("Drawing ", sensorId, sensorValue, vertexCount);
+        this.ctx.drawArrays(this.ctx.TRIANGLES, 0, vertexCount);
     }
 }
