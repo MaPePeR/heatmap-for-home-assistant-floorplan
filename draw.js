@@ -38,14 +38,14 @@ void main() {
 const COLORIZE_VERTEX_SHADER = `#version 300 es
 
 layout(location=0) in vec2 a_position;
-out vec2 v_pos;
+out vec2 v_texCoord;
 uniform vec2 u_scale;
 
 
 void main() {
     vec2 scaled = (a_position * vec2(2.0, 2.0) * u_scale - vec2(1.0, 1.0)) * vec2(1, -1);
     gl_Position = vec4(scaled.xy, 0, 1);
-    v_pos = a_position;
+    v_texCoord = (vec2(1,1) + scaled) / 2.0;
 }
 `;
 
@@ -53,15 +53,14 @@ const COLORIZE_FRAGMENT_SHADER = `#version 300 es
 
 precision highp float;
 
-in vec2 v_pos;
+in vec2 v_texCoord;
 out vec4 outColor;
 uniform sampler2D u_value;
 uniform sampler2D u_denom;
 
 void main() {
-    vec2 texCoord = v_pos;
-    float v = texture(u_value, texCoord).r;
-    float d = texture(u_denom, texCoord).r;
+    float v = texture(u_value, v_texCoord).r;
+    float d = texture(u_denom, v_texCoord).r;
     outColor = vec4(v/d, v/d, v/d, 1.0);
 }
 `
