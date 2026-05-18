@@ -17,6 +17,9 @@ loadbutton.addEventListener("click", function () {
     reader.readAsText(selectedFile);
 })
 function generateDistances() {
+    errorcontainer.innerText = "";
+    resultcontainer.innerText = "";
+    sensorcontrols.innerText = "";
     const areas = floorplancontainer.querySelectorAll('.ha-fp-hm-area');
     const sensors = floorplancontainer.querySelectorAll('.ha-fp-hm-sensor');
     if (!areas || !areas.length) {
@@ -97,9 +100,8 @@ function generateDistances() {
         }
         console.log(results)
         resultcontainer.innerText = JSON.stringify(results, null, "  ");
-        const renderer = createRenderer(results)
         setupSensorInputs(results)
-        observer = new Observer(results, floorplancontainer.querySelector('svg'), renderer)
+        MPPRHomeAssistantFloorPlanHeatMap.setup(floorplancontainer.querySelector('svg'), results)
     } catch (e) {
         errorcontainer.innerText += ""+e
         throw e;
