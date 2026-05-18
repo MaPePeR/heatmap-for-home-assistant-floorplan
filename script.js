@@ -477,6 +477,7 @@ function setupSensorInputs(results) {
             const encodedSensorId = textarea_because_js_sucks.innerText;
             inputs.push(`<label>${encodedSensorId}: <input type="text" class="sensor-input no-sensor-value" data-sensor-id="${encodedSensorId}"></input></label>`)
         }
+        inputs.push('<button type="button" class="sensor-randomize-button">Randomize</button>')
         sensorControlsDiv.innerHTML = inputs.join("");
     }
 }
@@ -500,4 +501,20 @@ document.getElementById('sensorcontrols').addEventListener('change', function (e
         t.classList.remove("no-sensor-value")
     }
     floorplancontainer.querySelector(`#${sensorId}`).dataset.haFpHmSensorValue = isFinite(value) ? value : "";
+})
+
+document.getElementById('sensorcontrols').addEventListener('click', function (e){
+    const t = e.target;
+    console.log(e)
+    if (!t.classList.contains("sensor-randomize-button")) {
+        return;
+    }
+    for (const el of this.querySelectorAll('input.sensor-input')) {
+        console.log(el)
+        const value =  Math.random().toFixed(2);
+        el.value = value;
+        el.classList.remove("invalid-sensor-value")
+        el.classList.remove("no-sensor-value")
+        floorplancontainer.querySelector(`#${el.dataset.sensorId}`).dataset.haFpHmSensorValue = value;
+    }
 })
