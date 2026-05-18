@@ -404,13 +404,15 @@ class Renderer {
     }
 
     render() {
-        if (this.sensorValues.size == 0) {
-            return;
-        }
+        this.doRender = true;
         requestAnimationFrame(() => {
+            if (!this.doRender) {
+                return;
+            }
+            this.doRender = false;
             const ctx = this.ctx;
             const rect = this.canvas.getBoundingClientRect()
-            
+
             rect.width = Math.floor(rect.width)
             rect.height = Math.floor(rect.height)
 
@@ -421,6 +423,16 @@ class Renderer {
                 this.setupTextures(rect.width, rect.height);
                 this.redoDenominatorTexture = true;
             }
+
+            if (this.sensorValues.size == 0) {
+                ctx.bindFramebuffer(ctx.FRAMEBUFFER, null);
+
+                ctx.viewport(0, 0, ctx.canvas.width, ctx.canvas.height);
+                ctx.clearColor(0,0,0,0);
+                ctx.clear(ctx.COLOR_BUFFER_BIT);
+                return;
+            }
+
 
             ctx.useProgram(this.renderTexProgram.prog)
 
