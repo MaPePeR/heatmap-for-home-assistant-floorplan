@@ -1,8 +1,26 @@
 <!DOCTYPE html>
 <html>
+    <head>
+        <style>
+            #sensorcontrols input {
+                width: 3em;
+            }
+            #sensorcontrols label {
+                margin-right: 1em;
+            }
+            #sensorcontrols input.invalid-sensor-value {
+                background-color: red;
+            }
+
+            #sensorcontrols input.no-sensor-value {
+                background-color: gray;
+            }
+        </style>
+    </head>
     <body>
         <input type="file" accept=".svg,image/svg+xml" id="fileselect" /><button type="button" id="loadbutton">Load</button>
         <div id="errorcontainer"></div>
+        <div id="sensorcontrols"></div>
         <div id="floorplancontainer"></div>
 
         <div style="overflow-x: scroll;">

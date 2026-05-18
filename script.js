@@ -97,7 +97,9 @@ function generateDistances() {
         }
         console.log(results)
         resultcontainer.innerText = JSON.stringify(results, null, "  ");
-        createRenderer(results)
+        const renderer = createRenderer(results)
+        setupSensorInputs(results)
+        observer = new Observer(results, floorplancontainer.querySelector('svg'), renderer)
     } catch (e) {
         errorcontainer.innerText += ""+e
         throw e;
@@ -455,3 +457,45 @@ function checkIfFaceComplete(face) {
     face.complete = true;
     return true;
 }
+
+function setupSensorInputs(results) {
+    const sensorControlsDiv = document.getElementById('sensorcontrols');
+    const inputs = [];
+    const textarea_because_js_sucks = document.createElement('textarea');
+    for (const areaId in results.areas) {
+        if (!Object.hasOwnProperty.call(results.areas, areaId)) {
+            continue;
+        }
+        const sensors = results.areas[areaId];
+        for (const sensorId in sensors) {
+            if (!Object.hasOwnProperty.call(sensors, sensorId)) {
+                continue;
+            }
+            textarea_because_js_sucks.innerText = sensorId;
+            const encodedSensorId = textarea_because_js_sucks.innerText;
+            inputs.push(`<label>${encodedSensorId}: <input type="text" class="sensor-input no-sensor-value" data-sensor-id="${encodedSensorId}"></input></label>`)
+        }
+        sensorControlsDiv.innerHTML = inputs.join("");
+    }
+}
+
+document.getElementById('sensorcontrols').addEventListener('change', function (e) {
+    console.log(e)
+    const t = e.target;
+    if (!t.classList.contains("sensor-input") || !t.dataset.sensorId) {
+        return;
+    }
+    const sensorId = t.dataset.sensorId;
+    const value = parseFloat(t.value)
+    if (t.value == "") {
+        t.classList.remove("invalid-sensor-value")
+        t.classList.add("no-sensor-value")
+    } else if (isNaN(value)) {
+        t.classList.add("invalid-sensor-value")
+        t.classList.remove("no-sensor-value")
+    } else {
+        t.classList.remove("invalid-sensor-value")
+        t.classList.remove("no-sensor-value")
+    }
+    floorplancontainer.querySelector(`#${sensorId}`).dataset.haFpHmSensorValue = isFinite(value) ? value : "";
+})

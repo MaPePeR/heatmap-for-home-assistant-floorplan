@@ -168,6 +168,7 @@ function createRenderer(data) {
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
     renderer = new Renderer(data, canvas);
+    return renderer;
 }
 
 function compileShader(ctx, code, type) {
@@ -333,6 +334,16 @@ class Renderer {
         this.sensorValues.set(sensorId, value);
     }
 
+    removeSensorValue(sensorId) {
+        if (!this.sensorRenderData.has(sensorId)) {
+            throw new Error("Unknown sensor id");
+        }
+        if (this.sensorValues.has(sensorId)) {
+            this.redoDenominatorTexture = true;
+        }
+        this.sensorValues.delete(sensorId);
+    }
+
     setupTextures(width, height) {
         if (this.nTexture) {
             this.ctx.deleteTexture(this.nTexture);
@@ -493,5 +504,47 @@ class Renderer {
         const vertexCount = this.sensorRenderData.get(sensorId).vertexCount
         console.log("Drawing ", sensorId, sensorValue, vertexCount);
         this.ctx.drawArrays(this.ctx.TRIANGLES, 0, vertexCount);
+    }
+}
+
+class Observer {
+    constructor(data, svg, renderer) {
+        this.svg = svg;
+        this.renderer = renderer;
+        this.mutationObserver = new MutationObserver(this.mutationObserverCallback.bind(this))
+        for (const areaId in data.areas) {
+            if (!Object.hasOwnProperty.call(data.areas, areaId)) {
+                continue;
+            }
+            const sensors = data.areas[areaId];
+            for (const sensorId in sensors) {
+                if (!Object.hasOwnProperty.call(sensors, sensorId)) {
+                    continue;
+                }
+                const sensorEl = svg.querySelector(`#${sensorId}.ha-fp-hm-sensor`);
+                this.mutationObserver.observe(sensorEl, {attributes: true, attributeFilter: ['data-ha-fp-hm-sensor-value']})
+            }
+        }
+    }
+
+    mutationObserverCallback(mutations) {
+        let changed = false;
+        for (const mutation of mutations) {
+            console.log(mutation);
+            if (mutation.type == "attributes" && mutation.attributeName == "data-ha-fp-hm-sensor-value") {
+                const v = parseFloat(mutation.target.dataset.haFpHmSensorValue);
+                if (isFinite(v)) {
+                    console.log(`Setting ${mutation.target.id} to ${v}`)
+                    this.renderer.setSensorValue(mutation.target.id, v);
+                } else {
+                    console.log(`Removing value for ${mutation.target.id}`)
+                    this.renderer.removeSensorValue(mutation.target.id);
+                }
+                changed = true;
+            }
+        }
+        if (changed) {
+            this.renderer.render();
+        }
     }
 }
