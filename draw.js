@@ -65,16 +65,6 @@ void main() {
 }
 `
 
-function readTex(tex) {
-    const buffer = Uint8Array.fromBase64(tex).buffer
-    const view = new DataView(buffer)
-    const n_vertices = view.getUint16()
-    return {
-        v: new Float16Array(buffer, 16/8, n_vertices*2),
-        f: new Uint16Array(buffer, 16/8 + n_vertices * 2 * 16/8),
-    }
-}
-
 function readSensorData(data) {
     const buffer = Uint8Array.fromBase64(data).buffer
     const view = new DataView(buffer);

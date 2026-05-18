@@ -1,8 +1,6 @@
 // Copyright 2026 MaPePeR
 // SPDX-License-Identifier: AGPL-3.0-only
 
-let memoryManager = new EmscriptenMemoryManager();
-
 loadbutton.addEventListener("click", function () {
     console.log("Handling file change")
     const selectedFile = fileselect.files[0] || null;
@@ -100,10 +98,9 @@ function generateDistances() {
         console.log(results)
         resultcontainer.innerText = JSON.stringify(results, null, "  ");
         createRenderer(results)
-    /*} catch (e) {
-        errorcontainer.innerText += ""+e*/
-    } finally {
-        memoryManager.deleteExcept([])
+    } catch (e) {
+        errorcontainer.innerText += ""+e
+        throw e;
     }
 }
 
