@@ -54,6 +54,8 @@ const MPPRHomeAssistantFloorPlanHeatMap = (function () {
 
     precision highp float;
 
+    /*COLORMAP_INCLUDE*/
+
     in vec2 v_texCoord;
     out vec4 outColor;
     uniform sampler2D u_value;
@@ -62,7 +64,8 @@ const MPPRHomeAssistantFloorPlanHeatMap = (function () {
     void main() {
         float v = texture(u_value, v_texCoord).r;
         float d = texture(u_denom, v_texCoord).r;
-        outColor = vec4(v/d, v/d, v/d, 1.0);
+        float value = clamp(v/d, 0.0, 1.0);
+        outColor = /*COLORMAP_EXPRESSION*/;
     }
     `
 
@@ -153,7 +156,7 @@ const MPPRHomeAssistantFloorPlanHeatMap = (function () {
         return result;
     }
 
-    function createRenderer(data, svg) {
+    function createRenderer(data, svg, colormap_code, colormap_expression) {
         const canvasRect = svg.querySelector('rect.ha-fp-hm');
         const foreignObjectEl = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
         const canvas = document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
@@ -167,7 +170,7 @@ const MPPRHomeAssistantFloorPlanHeatMap = (function () {
         canvas.setAttribute("style","width: 100%; height: 100%;");
         canvas.width = canvas.clientWidth;
         canvas.height = canvas.clientHeight;
-        return new Renderer(data, canvas);
+        return new Renderer(data, canvas, colormap_code, colormap_expression);
     }
 
     function compileShader(ctx, code, type) {
@@ -214,7 +217,7 @@ const MPPRHomeAssistantFloorPlanHeatMap = (function () {
     }
 
     class Renderer {
-        constructor(data, canvas) {
+        constructor(data, canvas, colormap_code, colormap_expression) {
             this.canvas = canvas;
             this.ctx = canvas.getContext("webgl2");
             this.scale = new Float32Array([data.scaleX, data.scaleY]);
@@ -259,7 +262,7 @@ const MPPRHomeAssistantFloorPlanHeatMap = (function () {
             this.colorizeProgram = createProgram(
                 this.ctx,
                 COLORIZE_VERTEX_SHADER,
-                COLORIZE_FRAGMENT_SHADER,
+                COLORIZE_FRAGMENT_SHADER.replace("/*COLORMAP_INCLUDE*/", colormap_code).replace("/*COLORMAP_EXPRESSION*/", colormap_expression),
                 ['a_position'],
                 ['u_scale', 'u_value', 'u_denom'],
             )
@@ -559,8 +562,8 @@ const MPPRHomeAssistantFloorPlanHeatMap = (function () {
     }
 
     return {
-        setup(svg, data) {
-            const renderer = createRenderer(data, svg);
+        setup(svg, data, colormapCode, colorExpression) {
+            const renderer = createRenderer(data, svg, colormapCode, colorExpression);
             const observer = new Observer(data, svg, renderer);
         }
     }

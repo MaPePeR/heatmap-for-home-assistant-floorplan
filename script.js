@@ -1,6 +1,12 @@
 // Copyright 2026 MaPePeR
 // SPDX-License-Identifier: AGPL-3.0-only
 
+const EXAMPLE_COLORMAP_URL = "https://cdn.jsdelivr.net/npm/glsl-colormap@1.0.1/viridis.glsl";
+const EXAMPLE_COLORMAP_INTEGRITY = "sha256-+ea8cJT7tf9EX9/Q991X7FT8676pW/8Dn1obClGb63s=";
+const EXAMPLE_COLORMAP_EXPR = "viridis(value)";
+
+let latestResultBlobUrl = null;
+
 loadbutton.addEventListener("click", function () {
     console.log("Handling file change")
     const selectedFile = fileselect.files[0] || null;
@@ -99,9 +105,29 @@ function generateDistances() {
             results.areas[area.id] = result
         }
         console.log(results)
-        resultcontainer.innerText = JSON.stringify(results, null, "  ");
+        const resultString = JSON.stringify(results, null, "  ")
+        resultcontainer.innerText = resultString;
         setupSensorInputs(results)
-        MPPRHomeAssistantFloorPlanHeatMap.setup(floorplancontainer.querySelector('svg'), results)
+
+        if (latestResultBlobUrl) {
+            URL.revokeObjectURL(latestResultBlobUrl);
+        }
+
+        latestResultBlobUrl = URL.createObjectURL(new Blob([resultString]));
+
+        (async (dataUrl) => {
+            const [data, colormapCode] = await Promise.all([
+                fetch(dataUrl).then((r) => r.json()),
+                fetch(EXAMPLE_COLORMAP_URL, {integrity: EXAMPLE_COLORMAP_INTEGRITY}).then(r => r.text()),
+            ])
+            console.log("Setting up Heatmap")
+            MPPRHomeAssistantFloorPlanHeatMap.setup(
+                floorplancontainer.querySelector('svg'),
+                data,
+                colormapCode,
+                EXAMPLE_COLORMAP_EXPR,
+            )
+        })(latestResultBlobUrl);
     } catch (e) {
         errorcontainer.innerText += ""+e
         throw e;
