@@ -227,7 +227,6 @@ class MyGeometry extends Geometry {
     checkLineOfSight(point, edge) {
         const eps = 10e-4;
         if (this.distToSegment(point, edge, false) < eps) {
-            return true;
             // Line of sight cone is basically a line
             const direction = this.positionVector(edge.halfedge.vertex).plus(this.vector(edge.halfedge).times(0.5)).minus(point);
             for (const other_edge of this.mesh.edges) {
