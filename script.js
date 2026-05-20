@@ -116,12 +116,13 @@ function generateDistances() {
         latestResultBlobUrl = URL.createObjectURL(new Blob([resultString]));
 
         (async (dataUrl) => {
-            const [data, colormapCode] = await Promise.all([
+            const [heatmapMopdule, data, colormapCode] = await Promise.all([
+                import("./draw.js"),
                 fetch(dataUrl).then((r) => r.json()),
                 fetch(EXAMPLE_COLORMAP_URL, {integrity: EXAMPLE_COLORMAP_INTEGRITY}).then(r => r.text()),
             ])
             console.log("Setting up Heatmap")
-            MPPRHomeAssistantFloorPlanHeatMap.setup(
+            heatmapMopdule.setup(
                 floorplancontainer.querySelector('svg'),
                 data,
                 colormapCode,
