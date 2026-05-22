@@ -333,12 +333,10 @@ class MyMesh extends Mesh {
     insertVertexIntoEdge(edge) {
         const newHalfedge_straight = new Halfedge();
         newHalfedge_straight.index = this.halfedges.length;
-        newHalfedge_straight.debug = "newHalfedge_straight"
         this.halfedges.push(newHalfedge_straight);
 
         const newHalfedge_twin = new Halfedge();
         newHalfedge_twin.index = this.halfedges.length;
-        newHalfedge_twin.debug = "newHalfedge_twin"
         this.halfedges.push(newHalfedge_twin);
 
         const newVertex = new Vertex();
@@ -436,7 +434,6 @@ class MyMesh extends Mesh {
         new_vertex.index = this.vertices.length - 1;
 
         const new_face = new Face();
-        new_face.debug = "new_face";
 
         this.faces.push(new_face);
         new_face.index = this.faces.length - 1
@@ -450,14 +447,10 @@ class MyMesh extends Mesh {
         new_edge_next.index = this.edges.length - 1;
 
         const new_halfedge_s = new Halfedge();
-        new_halfedge_s.debug = "new_halfedge_s";
         const new_halfedge_twin = new Halfedge();
-        new_halfedge_twin.debug = "new_halfedge_twin";
 
         const new_halfedge_next = new Halfedge();
-        new_halfedge_next.debug = "new_halfedge_next";
         const new_halfedge_next_twin = new Halfedge();
-        new_halfedge_next_twin.debug = "new_halfedge_next_twin";
         
         new_face.halfedge = new_halfedge_s;
 
@@ -520,7 +513,6 @@ class MyMesh extends Mesh {
 
         if (!halfedge.twin.onBoundary) {
             const new_face_twin = new Face();
-            new_face_twin.debug = "new_face_twin";
 
             this.faces.push(new_face_twin);
             new_face_twin.index = this.faces.length - 1;
@@ -530,9 +522,7 @@ class MyMesh extends Mesh {
             new_edge_opposite.index = this.edges.length - 1;
 
             const new_halfedge_opposite = new Halfedge();
-            new_halfedge_opposite.debug = "new_halfedge_opposite";
             const new_halfedge_opposite_twin = new Halfedge();
-            new_halfedge_opposite_twin.debug = "new_halfedge_opposite_twin";
 
             new_face_twin.halfedge = new_halfedge_twin;
 
