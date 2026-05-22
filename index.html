@@ -15,10 +15,131 @@
             #sensorcontrols input.no-sensor-value {
                 background-color: gray;
             }
+            p,li {
+                max-width: 800px;
+            }
         </style>
     </head>
     <body>
-        <input type="file" accept=".svg,image/svg+xml" id="fileselect" /><button type="button" id="loadbutton">Load</button>
+        <h1>Heatmap for Homeassistant Floorplan</h1>
+        <details open><summary>Explaination, Requirements, Installation</summary>
+            <p>
+                This is a tool to add a
+                <a href="https://en.wikipedia.org/wiki/Inverse_distance_weighting" target="_blank">distance weighted heatmap</a>
+                to a
+                <a href="https://experiencelovelace.github.io/ha-floorplan/" target="_blank">Floorplan for Home Assitant</a>.
+            </p>
+            <p>
+                A JSON structure is generated that allows to calculate <i>path distance</i> from every choosen sensor to every point
+                in your floorplan to generate a weighted interpolated value.
+                The heatmap data is then calculated and rendererd with WebGL2 to a <code>&lt;canvas&gt;</code> that is inserted into your floorplan.
+            </p>
+            <p>
+                Requirements for Floorplan <code>.svg</code>:
+            </p>
+            <ul>
+                <li>
+                    At least one <code>path.ha-fp-hm-area</code> element
+                    that is composed only of straight lines and does not contain any holes.
+                    The enclosed area defines the area in which to generate the heatmap. These require an <code>id</code>.
+                </li>
+                <li>
+                    At least one <code>.ha-fp-hm-sensor</code> Element. Their bounding box center
+                    set the sensor locations for the heatmap. These require an <code>id</code>.
+                </li>
+                <li>
+                    A single <code>rect.ha-fp-hm</code> element. This element defines the location of
+                    the canvas that will be used to show the heatmap.
+                </li>
+                <li>
+                    A <code>&lt;foreingObject&gt;</code> element to contain the custom element that controls
+                    rendering the heatmap.
+                    <small>
+                        I didn't like that I wasn't able to control the size/position
+                        of the <code>&lt;foreingObject&gt;</code> in Inkscape, so a normal
+                        <code>&lt;rect&gt;</code> is used.
+                        This object won't render anything itself for now.
+                    </small>
+                </li>
+            </ul>
+            <p>
+                The tool will generate a JSON structure that contains all the distance data for all the sensors.
+                If you change your layout or any sensor position you will have to regenerate that data.
+            </p>
+            <p>To add it to Home Assistant you will need to:</p>
+            <ul>
+                <li>
+                    Upload the
+                    <a href="./draw.js" target="_blank"><code>draw.js</code></a>
+                    and configure it as a local Dashboard resource.
+                </li>
+                <li>
+                    Upload the
+                    <a href="https://cdn.jsdelivr.net/npm/earcut/+esm" target="_blank"><code>earcut.min.js</code></a>
+                    dependency.
+                    Does not have to be added as a dashboard resource.
+                    Has to be next to the <code>draw.js</code>, as it is imported with a relative path.
+                </li>
+                <li>
+                    Upload a file that contains a glsl function that does colormapping. E.g.
+                    <a href="https://cdn.jsdelivr.net/npm/glsl-colormap@1.0.1/viridis.glsl" target="_blank">viridis</a>.
+                    Other implementations can be found
+                    <a href="https://www.jsdelivr.com/package/npm/glsl-colormap?tab=files" target="_blank">in the glsl-colormap package</a>,
+                    which creates shader colormap functions from colormaps from
+                    <a href="https://www.jsdelivr.com/package/npm/colormap" target="_blank">the colormap package</a>.
+                </li>
+                <li>
+                    Upload the JSON data this website will generate for you.
+                </li>
+                <li>
+                    Configure <code>ha-floorplan</code> to load the custom element into the
+                    <code>&lt;foreingObject&gt;</code> and supply the configuration at startup:
+<pre>          startup_action:
+            - action: call-service
+              service: floorplan.card_set
+              service_data:
+                container_id: heatmapcontrollercontainer # id of foreingObject in svg file
+                config:
+                  type: custom:mppr-heatmap
+                  dataUrl: /local/floorplan/my_home/heatmap_data.json # web path to your JSON data
+                  colormapCode: /local/floorplan/my_home/viridis.glsl # web path to your colormap shader
+                  colorExpression: viridis(clamp((value - 20.0) / 10.0,0.0,1.0))  # expression that calls your colormap shader function
+</pre>
+                </li>
+                <li>
+                    Configure <code>ha-floorplan</code> to update the <code>data-ha-fp-hm-sensor-value</code> attribute
+                    of a <code>.ha-fp-hm-sensor</code> element when a sensor value changes:
+<pre>
+          rules:
+            - entities:
+                - entity: sensor.th_i1_temperature
+                  element: bedroom1
+                - entity: sensor.th_i2_temperature
+                  element: livingroom1
+              state_action:
+                action: call-service
+                service: floorplan.dataset_set
+                service_data:
+                  key: haFpHmSensorValue # Note this uses the JavaScript instead of the HTML notation
+                  value: ${entity.state}
+</pre>
+                </li>
+            </ul>
+            <p>
+                Load your augmented floorplan here to generate the distance data for your floorplan.
+                After loading your floorplan you have the option to simulate and randomize sensor data (0.0-1.0) to see the heatmap result.
+                Sensors without a valid value will be ignored.
+            </p>
+        </details>
+        <p>
+            <b>Disclaimer:</b>
+            The algorithm to generate the distance-data contains <i>a lot</i> of literal and figurative edge cases.
+            It would be a miracle if I managed to properly handle them all.
+        </p>
+
+        <p>
+            <input type="file" accept=".svg,image/svg+xml" id="fileselect" /><button type="button" id="loadbutton">Load</button>
+        </p>
         <div id="errorcontainer"></div>
         <div id="sensorcontrols"></div>
         <div id="floorplancontainer"></div>
