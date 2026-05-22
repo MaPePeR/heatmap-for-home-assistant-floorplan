@@ -399,7 +399,7 @@ function createDistanceGeometry(polygon, sourcePoint) {
                 previousHalfedgeOnNewFace.distanceToSource = geometry.distToSegment(newFace.source, previousHalfedgeOnNewFace.edge) + newFace.distanceSum;
                 nextHalfedgeOnNewFace.distanceToSource = geometry.distToSegment(newFace.source, nextHalfedgeOnNewFace.edge) + newFace.distanceSum;
                 if (newHalfedgeOnThisFace.face || previousHalfedgeOnNewFace.face || nextHalfedgeOnNewFace.face) {
-                    throw new Error("Already have a face set for new edges to check")
+                    //throw new Error("Already have a face set for new edges to check")
                     continue;
                 }
                 nextEdges.push({
