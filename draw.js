@@ -1,6 +1,8 @@
 // Copyright 2026 MaPePeR
 // SPDX-License-Identifier: AGPL-3.0-only
 
+// Download from e.g. https://cdn.jsdelivr.net/npm/earcut/+esm
+import earcut from "./earcut.min.js"
 
 const IDW_VERTEX_SHADER = `#version 300 es
 
@@ -146,7 +148,7 @@ function earcutFace(vertexPositions, indices) {
         earcutInput[i*2 + 0] = vertexPositions[idx*2 + 0]
         earcutInput[i*2 + 1] = vertexPositions[idx*2 + 1]
     }
-    const earcutResult = earcut.default(earcutInput);
+    const earcutResult = earcut(earcutInput);
     const result = new Float16Array(earcutResult.length * 2)
     for (let i = 0; i < earcutResult.length; i++) {
         result[i*2 + 0] = earcutInput[earcutResult[i]*2 + 0];
@@ -535,6 +537,13 @@ class Observer {
                 }
                 const sensorEl = svg.querySelector(`#${sensorId}.ha-fp-hm-sensor`);
                 this.mutationObserver.observe(sensorEl, {attributes: true, attributeFilter: ['data-ha-fp-hm-sensor-value']})
+                if (sensorEl.dataset.haFpHmSensorValue) {
+                    const v = parseFloat(sensorEl.dataset.haFpHmSensorValue);
+                    if (isFinite(v)) {
+                        console.log(`Setting ${sensorEl.id} to ${v}`)
+                        this.renderer.setSensorValue(sensorEl.id, v);
+                    }
+                }
             }
         }
     }
@@ -565,3 +574,55 @@ export function  setup(svg, data, colormapCode, colorExpression) {
     const renderer = createRenderer(data, svg, colormapCode, colorExpression);
     const observer = new Observer(data, svg, renderer);
 }
+
+class HeatmapElement extends HTMLElement {
+    #loadedConfig = false;
+    #data;
+    #colormapCode;
+    #colorExpression;
+    #svg;
+    #renderer;
+    #observer;
+    connectedCallback() {
+        this.#svg = this.closest('svg');
+        if (!this.#svg) {
+            throw new Error("Coudln't find parent SVG");
+        }
+        if (this.#loadedConfig) {
+            this.setup()
+        }
+    }
+
+    setConfig(config) {
+        this.#colorExpression = config.colorExpression;
+        (async () => {
+            const [data, colormapCode] = await Promise.all([
+                fetch(...config.dataUrl).then((r) => r.json()),
+                fetch(...config.colormapCode).then(r => r.text()),
+            ])
+            this.#data = data;
+            this.#colormapCode = colormapCode;
+            this.#loadedConfig = true;
+            if (this.#svg) {
+                this.setup();
+            }
+        })();
+
+    }
+
+    setup() {
+        this.#renderer = createRenderer(this.#data, this.#svg, this.#colormapCode, this.#colorExpression);
+        this.#observer = new Observer(this.#data, this.#svg, this.#renderer);
+    }
+
+    disconnectedCallback() {
+        if (this.#observer) {
+            this.#observer.mutationObserver.disconnect();
+            this.#observer = null;
+        }
+        this.#renderer = null
+        this.#svg = null;
+    }
+}
+
+customElements.define("mppr-heatmap", HeatmapElement);

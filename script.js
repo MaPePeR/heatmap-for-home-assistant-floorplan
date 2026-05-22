@@ -115,20 +115,16 @@ function generateDistances() {
 
         latestResultBlobUrl = URL.createObjectURL(new Blob([resultString]));
 
-        (async (dataUrl) => {
-            const [heatmapMopdule, data, colormapCode] = await Promise.all([
-                import("./draw.js"),
-                fetch(dataUrl).then((r) => r.json()),
-                fetch(EXAMPLE_COLORMAP_URL, {integrity: EXAMPLE_COLORMAP_INTEGRITY}).then(r => r.text()),
-            ])
-            console.log("Setting up Heatmap")
-            heatmapMopdule.setup(
-                floorplancontainer.querySelector('svg'),
-                data,
-                colormapCode,
-                EXAMPLE_COLORMAP_EXPR,
-            )
-        })(latestResultBlobUrl);
+        const svg = floorplancontainer.querySelector('svg');
+        const foreignObjectEl = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
+        const heatmap = new (customElements.get("mppr-heatmap"));
+        heatmap.setConfig({
+            dataUrl: [latestResultBlobUrl],
+            colormapCode: [EXAMPLE_COLORMAP_URL, {integrity: EXAMPLE_COLORMAP_INTEGRITY}],
+            colorExpression: EXAMPLE_COLORMAP_EXPR,
+        })
+        foreignObjectEl.appendChild(heatmap)
+        svg.appendChild(foreignObjectEl)
     } catch (e) {
         errorcontainer.innerText += ""+e
         throw e;
