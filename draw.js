@@ -595,6 +595,12 @@ class HeatmapElement extends HTMLElement {
 
     setConfig(config) {
         this.#colorExpression = config.colorExpression;
+        if (typeof config.dataUrl === "string" || config.dataUrl instanceof String) {
+            config.dataUrl = [config.dataUrl];
+        }
+        if (typeof config.colormapCode === "string" || config.colormapCode instanceof String) {
+            config.colormapCode = [config.colormapCode];
+        }
         (async () => {
             const [data, colormapCode] = await Promise.all([
                 fetch(...config.dataUrl).then((r) => r.json()),
