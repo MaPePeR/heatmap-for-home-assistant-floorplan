@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Download from e.g. https://cdn.jsdelivr.net/npm/earcut/+esm
-import earcut from "./earcut.min.js"
+// dynamic import, so the script works in the github page, but also with locally sourced dependency.
+const doearcut = typeof earcut === undefined ? import("./earcut.min.js") : earcut.default;
 
 const IDW_VERTEX_SHADER = `#version 300 es
 
@@ -148,7 +149,7 @@ function earcutFace(vertexPositions, indices) {
         earcutInput[i*2 + 0] = vertexPositions[idx*2 + 0]
         earcutInput[i*2 + 1] = vertexPositions[idx*2 + 1]
     }
-    const earcutResult = earcut(earcutInput);
+    const earcutResult = doearcut(earcutInput);
     const result = new Float16Array(earcutResult.length * 2)
     for (let i = 0; i < earcutResult.length; i++) {
         result[i*2 + 0] = earcutInput[earcutResult[i]*2 + 0];
