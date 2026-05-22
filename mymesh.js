@@ -94,7 +94,6 @@ class MyGeometry extends Geometry {
                 ccwCount +=1;
             }
         }
-        console.log("CCW:", ccwCount, "CW:", cwCount)
     }
 
     fixRotations() {

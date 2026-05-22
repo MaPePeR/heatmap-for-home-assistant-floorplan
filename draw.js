@@ -154,7 +154,6 @@ function earcutFace(vertexPositions, indices) {
         result[i*2 + 0] = earcutInput[earcutResult[i]*2 + 0];
         result[i*2 + 1] = earcutInput[earcutResult[i]*2 + 1];
     }
-    console.log(result)
     return result;
 }
 
@@ -289,13 +288,11 @@ class Renderer {
                 sensorMap.set(sensorId, readSensorData(sensorData));
             }
         }
-        console.log(sensorMap);
 
         const ctx = this.ctx;
         const positionAttrib = this.renderTexProgram.attributes.get("a_position");
         const distanceAttrib = this.renderTexProgram.attributes.get("a_distance");
         sensorMap.forEach((sensorData, sensorId) => {
-            console.log(sensorId, sensorData)
             const vao = ctx.createVertexArray();
             this.vaos.set(sensorId, vao);
             ctx.bindVertexArray(vao);
@@ -551,7 +548,6 @@ class Observer {
     mutationObserverCallback(mutations) {
         let changed = false;
         for (const mutation of mutations) {
-            console.log(mutation);
             if (mutation.type == "attributes" && mutation.attributeName == "data-ha-fp-hm-sensor-value") {
                 const v = parseFloat(mutation.target.dataset.haFpHmSensorValue);
                 if (isFinite(v)) {

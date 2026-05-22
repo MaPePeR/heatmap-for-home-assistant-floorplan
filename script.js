@@ -66,8 +66,7 @@ function generateDistances() {
 
     const scale = 1 / Math.max(canvasBBox.width, canvasBBox.height)
     const resolution = new Vector(1 / (canvasBBox.width * scale), 1 / (canvasBBox.height * scale));
-    console.log(resolution)
-    
+
     // Applies in reverse order...
     const convertCoords = new DOMMatrix()
         //.flipY()
@@ -76,8 +75,6 @@ function generateDistances() {
         .scale(scale, scale)
         .translate(-canvasBBox.x, -canvasBBox.y)
         .multiply(screen2canvas);
-
-    console.log(convertCoords)
 
     const sensorPoints = new Map(Array.from(sensors).map((sensor) => {
         const sensor2screen = sensor.getScreenCTM();
@@ -134,7 +131,6 @@ function generateDistances() {
 
 function getPolygon(area, convertCoords) {
     const pathdata = area.getPathData({"normalize": true})
-    console.log("Pathdata", pathdata.map((p) => `${p.type} ${p.values}`).join(" "))
     if (pathdata[0].type != "M") {
         throw new Error("First Area Path Command is not Move");
     }
@@ -286,7 +282,6 @@ function createDistanceGeometry(polygon, sourcePoint) {
     startEdge.halfedge.next.distanceToSource = geometry.distToSegment(sourcePoint, startEdge.halfedge.next.edge);
     startEdge.halfedge.prev.distanceToSource = geometry.distToSegment(sourcePoint, startEdge.halfedge.prev.edge);
 
-    console.log(geometry.printHalfedge(startEdge.halfedge));
     let nextEdges = [
         {halfedge: startEdge.halfedge.next, referencePrevious: true},
         {halfedge: startEdge.halfedge.prev, referencePrevious: false},
@@ -312,8 +307,6 @@ function createDistanceGeometry(polygon, sourcePoint) {
             }
             const sourcePoint = face.source;
             const angle = geometry.smallestAngleBetweenVectors(pointAlreadyVisited.minus(sourcePoint), newPoint.minus(sourcePoint));
-
-            console.log(geometry.printHalfedge(halfedge));
 
             if (Math.abs(angle) < 10e-4||(!referencePrevious && angle < 0) || (referencePrevious && angle > 0)) {
                 if (!geometry.checkLineOfSight(sourcePoint, halfedge.edge)) {
@@ -342,7 +335,7 @@ function createDistanceGeometry(polygon, sourcePoint) {
                 }
 
                 const intersection = geometry.closestIntersectionEdgeWithLine(pointAlreadyVisited, pointAlreadyVisited.minus(sourcePoint))
-                console.log(intersection);
+                //console.log(intersection);
 
                 if (!intersection) {
                     throw new Error("Failed to intersect");
@@ -373,7 +366,7 @@ function createDistanceGeometry(polygon, sourcePoint) {
                 }
                 
                 const newHalfedge = geometry.mesh.addEdgeConnectingHalfedges(newEdgeFrom, newEdgeTo)
-                console.log(geometry.printAllHalfedges())
+                //console.log(geometry.printAllHalfedges())
                 //geometry.check(false, false)
 
                 nextEdges = nextEdges.filter((c) => c.halfedge.edge !== intersection.edge)
@@ -533,7 +526,6 @@ document.getElementById('sensorcontrols').addEventListener('click', function (e)
         return;
     }
     for (const el of this.querySelectorAll('input.sensor-input')) {
-        console.log(el)
         const value =  Math.random().toFixed(2);
         el.value = value;
         el.classList.remove("invalid-sensor-value")
