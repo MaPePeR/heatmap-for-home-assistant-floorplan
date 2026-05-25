@@ -22,7 +22,18 @@
     </head>
     <body>
         <h1>Heatmap for Homeassistant Floorplan</h1>
-        <details open><summary>Explaination, Requirements, Installation</summary>
+
+        <p>
+            <input type="file" accept=".svg,image/svg+xml" id="fileselect" /><button type="button" id="loadbutton">Load</button>
+        </p>
+        <div id="errorcontainer"></div>
+        <div id="sensorcontrols"></div>
+        <div id="floorplancontainer"></div>
+
+        <div style="overflow-x: scroll;">
+            <pre id="resultcontainer"></pre>
+        </div>
+
             <p>
                 This is a tool to add a
                 <a href="https://en.wikipedia.org/wiki/Inverse_distance_weighting" target="_blank">distance weighted heatmap</a>
@@ -130,23 +141,12 @@
                 After loading your floorplan you have the option to simulate and randomize sensor data (0.0-1.0) to see the heatmap result.
                 Sensors without a valid value will be ignored.
             </p>
-        </details>
         <p>
             <b>Disclaimer:</b>
             The algorithm to generate the distance-data contains <i>a lot</i> of literal and figurative edge cases.
             It would be a miracle if I managed to properly handle them all.
         </p>
 
-        <p>
-            <input type="file" accept=".svg,image/svg+xml" id="fileselect" /><button type="button" id="loadbutton">Load</button>
-        </p>
-        <div id="errorcontainer"></div>
-        <div id="sensorcontrols"></div>
-        <div id="floorplancontainer"></div>
-
-        <div style="overflow-x: scroll;">
-            <pre id="resultcontainer"></pre>
-        </div>
         <script src="vendor/geometry-processing-js/linear-algebra/vector.js" integrity="sha256-qJbzMFsqTO00Uw2FlkKBD1+ZRYkRltK+f6z3HfQp3Og=" crossorigin="anonymous"></script>
         <script src="vendor/geometry-processing-js/core/edge.js" integrity="sha256-qWtIuhOjYWMzBpUa0s30cvJsq1sjWuyFNQRAqV0P3AY=" crossorigin="anonymous"></script>
         <script src="vendor/geometry-processing-js/core/face.js" integrity="sha256-SnLY+X02lz31Ou+uPI5q6nnPk+sIGzS+vTNr+PJTpQg=" crossorigin="anonymous"></script>
