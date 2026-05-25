@@ -42,6 +42,10 @@ function generateDistances() {
         errorcontainer.innerText += "Cannot find exactly one 'rect.ha-fp-hm' in floorplan";
         return
     }
+    if (areas.length != 1) {
+        errorcontainer.innerText += "Cannot find exactly one '.ha-fp-hm-area' in floorplan";
+        return
+    }
     const canvasRect = canvasRects[0];
     let missingId = false;
     for (const area of areas) {
