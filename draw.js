@@ -230,6 +230,7 @@ class Renderer {
         this.redoDenominatorTexture = true;
         this.valueTexture = null;
         this.denomTexture = null;
+        this.simplestSensorForArea = new Map();
 
         this.valueFrameBuffer = null;
         this.denomFrameBuffer = null;
@@ -270,6 +271,7 @@ class Renderer {
         )
 
         this.setupVertexArrayObjects(data);
+        this.findSimplestSensors(data);
         this.render();
     }
 
@@ -322,6 +324,27 @@ class Renderer {
             
         });
         
+    }
+
+    findSimplestSensors(data) {
+        for (let areaId in data.areas) {
+            if (!Object.hasOwnProperty.call(data.areas, areaId)) {
+                continue;
+            }
+            const area_data = data.areas[areaId];
+            for (const sensorId in area_data) {
+                if (!Object.hasOwnProperty.call(area_data, sensorId)) {
+                    continue;
+                }
+                if (
+                    !this.simplestSensorForArea.has(areaId)
+                    || this.simplestSensorForArea.get(areaId).vertexCount < this.sensorRenderData.get(sensorId).vertexCount
+                ) {
+                    this.simplestSensorForArea.set(areaId, sensorId);
+                }
+
+            }
+        }
     }
 
     setSensorValue(sensorId, value) {
@@ -489,7 +512,7 @@ class Renderer {
             ctx.uniform1i(this.colorizeProgram.uniforms.get('u_value'), 0);
             ctx.uniform1i(this.colorizeProgram.uniforms.get('u_denom'), 1);
 
-            this.sensorValues.forEach((_, sensorId) => {
+            this.simplestSensorForArea.forEach((sensorId, _) => {
                 ctx.bindVertexArray(this.vaos.get(sensorId));
                 const vertexCount = this.sensorRenderData.get(sensorId).vertexCount
                 console.log("Drawing colorized", sensorId, vertexCount);
