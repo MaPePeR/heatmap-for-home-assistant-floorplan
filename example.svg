@@ -7,7 +7,7 @@
    viewBox="0 0 500 500"
    version="1.1"
    id="svg1"
-   sodipodi:docname="example3.svg"
+   sodipodi:docname="example.svg"
    inkscape:version="1.4.3 (0d15f75, 2025-12-25)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
@@ -23,16 +23,31 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
-     inkscape:zoom="0.71891836"
-     inkscape:cx="111.27828"
-     inkscape:cy="248.28967"
+     inkscape:zoom="1.782613"
+     inkscape:cx="138.28016"
+     inkscape:cy="266.18229"
      inkscape:window-width="1920"
      inkscape:window-height="1009"
      inkscape:window-x="-8"
      inkscape:window-y="-8"
      inkscape:window-maximized="1"
      inkscape:current-layer="layer1"
-     showgrid="false" />
+     showgrid="false">
+    <inkscape:grid
+       id="grid1"
+       units="mm"
+       originx="0"
+       originy="0"
+       spacingx="1"
+       spacingy="1"
+       empcolor="#3f3fff"
+       empopacity="0.25098039"
+       color="#3f3fff"
+       opacity="0.1254902"
+       empspacing="5"
+       enabled="true"
+       visible="false" />
+  </sodipodi:namedview>
   <defs
      id="defs1" />
   <g
@@ -41,9 +56,10 @@
      id="layer1">
     <path
        style="fill:#6699ff;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:3.77953;stroke-linecap:butt;stroke-linejoin:miter;stroke-dasharray:none;stroke-opacity:1"
-       d="M 99.774324,253.15809 H 349.77432 v 250 H 99.774324 Z"
+       d="M 250,250 250,125 H 375 V 375 H 125 l 0,-125 z"
        id="path1"
-       class="ha-fp-hm-area" />
+       class="ha-fp-hm-area"
+       sodipodi:nodetypes="ccccccc" />
     <rect
        style="fill:none;stroke:#000000;stroke-width:3.77953;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:15.1344, 30.2851;stroke-dashoffset:0;stroke-opacity:1;paint-order:stroke fill markers"
        id="rect1"
@@ -55,10 +71,16 @@
     <circle
        class="ha-fp-hm-sensor"
        style="fill:none;stroke:#000000;stroke-width:3.77953;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;paint-order:stroke fill markers"
-       id="examplesensor"
-       cx="302.27814"
-       cy="38.571262"
+       id="examplesensor2"
+       cx="150"
+       cy="350"
        r="3" />
-
+    <circle
+       class="ha-fp-hm-sensor"
+       style="fill:none;stroke:#000000;stroke-width:3.77953;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;paint-order:stroke fill markers"
+       id="examplesensor1"
+       cx="350"
+       cy="150"
+       r="3" />
   </g>
 </svg>
