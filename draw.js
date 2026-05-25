@@ -170,8 +170,6 @@ function createRenderer(data, svg, colormap_code, colormap_expression) {
     // Insert foreignObject after rect
     canvasRect.parentNode.insertBefore(foreignObjectEl, canvasRect.nextSibling);
     canvas.setAttribute("style","width: 100%; height: 100%;");
-    canvas.width = canvas.clientWidth;
-    canvas.height = canvas.clientHeight;
     return new Renderer(data, canvas, colormap_code, colormap_expression);
 }
 
@@ -439,7 +437,7 @@ class Renderer {
             rect.width = Math.floor(rect.width)
             rect.height = Math.floor(rect.height)
 
-            if (this.canvas.width != rect.width || this.canvas.height != rect.height) {
+            if (!this.denomTexture || this.canvas.width != rect.width || this.canvas.height != rect.height) {
                 console.log(`Resizing canvas from ${this.canvas.width}, ${this.canvas.height} to ${rect.width}, ${rect.height}`);
                 this.canvas.width = rect.width;
                 this.canvas.height = rect.height;
