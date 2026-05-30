@@ -18,6 +18,9 @@
             p,li {
                 max-width: 800px;
             }
+            .footnote:target {
+                background-color: lightblue;
+            }
         </style>
     </head>
     <body>
@@ -28,12 +31,20 @@
         </p>
         <div id="errorcontainer"></div>
         <div id="sensorcontrols"></div>
+        <div id="cuthicontrols" style="display: none;">
+            <label>
+                <input type="checkbox" name="cuthi" id="cuthicheckbox" />
+                Enable
+                <a href="#footnote-cuthi">CUTHI</a>.
+                Requires significantly more GPU resources.
+            </label>
+        </div>
         <div id="floorplancontainer"></div>
 
         <div style="overflow-x: scroll;">
             <pre id="resultcontainer"></pre>
         </div>
-
+            <h2>Description</h2>
             <p>
                 This is a tool to add a
                 <a href="https://en.wikipedia.org/wiki/Inverse_distance_weighting" target="_blank">distance weighted heatmap</a>
@@ -112,6 +123,7 @@
                 container_id: heatmapcontrollercontainer # id of foreingObject in svg file
                 config:
                   type: custom:mppr-heatmap
+                  cuthi: <span id="cuthiconfig">false</span>
                   dataUrl: /local/floorplan/my_home/heatmap_data.json # web path to your JSON data
                   colormapCode: /local/floorplan/my_home/viridis.glsl # web path to your colormap shader
                   colorExpression: viridis(clamp((value - 20.0) / 10.0,0.0,1.0))  # expression that calls your colormap shader function
@@ -141,10 +153,18 @@
                 After loading your floorplan you have the option to simulate and randomize sensor data (0.0-1.0) to see the heatmap result.
                 Sensors without a valid value will be ignored.
             </p>
+        <h3>Disclaimer</h3>
         <p>
-            <b>Disclaimer:</b>
             The algorithm to generate the distance-data contains <i>a lot</i> of literal and figurative edge cases.
             It would be a miracle if I managed to properly handle them all.
+        </p>
+
+        <h3>References</h3>
+        <p id="footnote-cuthi" class="footnote">
+            [1] Benmoshe, N. (2025).
+            A Simple Solution for the Inverse Distance Weighting Interpolation (IDW) Clustering Problem.
+            Sci, 7(1), 30.
+            <a href="https://doi.org/10.3390/sci7010030" target="_blank">https://doi.org/10.3390/sci7010030</a>
         </p>
 
         <script src="vendor/geometry-processing-js/linear-algebra/vector.js" integrity="sha256-qJbzMFsqTO00Uw2FlkKBD1+ZRYkRltK+f6z3HfQp3Og=" crossorigin="anonymous"></script>

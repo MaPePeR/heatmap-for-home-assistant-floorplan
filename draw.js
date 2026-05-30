@@ -229,6 +229,7 @@ function createProgram(ctx, vertex_code, fragment_code, attributes, uniforms) {
 
 class Renderer {
     constructor(data, canvas, colormap_code, colormap_expression) {
+        this.cuthi = false;
         this.canvas = canvas;
         this.ctx = canvas.getContext("webgl2");
         this.scale = new Float32Array([data.scaleX, data.scaleY]);
@@ -282,6 +283,27 @@ class Renderer {
         this.setupVertexArrayObjects(data);
         this.findSimplestSensors(data);
         this.render();
+    }
+
+    setCUTHI(enabled) {
+        if (enabled == this.cuthi) {
+            return;
+        }
+        this.cuthi = enabled;
+        if (this.cuthi) {
+            // CUTHI was enabled. Delete non-Cuthi resources
+            this.ctx.deleteTexture(this.denomTexture);
+            this.ctx.deleteTexture(this.valueTexture);
+            this.ctx.deleteFramebuffer(this.valueFrameBuffer);
+            this.ctx.deleteFramebuffer(this.denomFrameBuffer);
+            this.redoDenominatorTexture = true;
+            this.denomTexture = null;
+            this.valueTexture = null;
+            this.valueFrameBuffer = null;
+            this.denomFrameBuffer = null;
+        } else {
+            // TODO: Destroy cuthi resources
+        }
     }
 
     setupVertexArrayObjects(data) {
@@ -437,7 +459,11 @@ class Renderer {
     }
 
     render() {
-        this.renderIDW();
+        if (this.cuthi) {
+            this.renderCUTHI();
+        } else {
+            this.renderIDW();
+        }
     }
 
     renderIDW() {
@@ -545,6 +571,41 @@ class Renderer {
         })
     }
 
+    renderCUTHI() {
+        this.doRender = true;
+        requestAnimationFrame(() => {
+            if (!this.doRender) {
+                return;
+            }
+            this.doRender = false;
+            const ctx = this.ctx;
+            const rect = this.canvas.getBoundingClientRect()
+
+            rect.width = Math.floor(rect.width)
+            rect.height = Math.floor(rect.height)
+
+            if (!this.denomTexture || this.canvas.width != rect.width || this.canvas.height != rect.height) {
+                console.log(`Resizing canvas from ${this.canvas.width}, ${this.canvas.height} to ${rect.width}, ${rect.height}`);
+                this.canvas.width = rect.width;
+                this.canvas.height = rect.height;
+                this.setupTexturesIDW(rect.width, rect.height);
+                this.redoDenominatorTexture = true;
+            }
+
+            if (this.sensorValues.size == 0) {
+                ctx.bindFramebuffer(ctx.FRAMEBUFFER, null);
+
+                ctx.viewport(0, 0, ctx.canvas.width, ctx.canvas.height);
+                ctx.clearColor(0,0,0,0);
+                ctx.clear(ctx.COLOR_BUFFER_BIT);
+                return;
+            }
+
+            ctx.clearColor(0,0,0,1);
+            ctx.clear(ctx.COLOR_BUFFER_BIT);
+        });
+    }
+
     drawSensorWithValue(sensorValue, sensorId) {
         const sensorValueUniform = this.renderTexProgram.uniforms.get('u_sensorValue');
         this.ctx.uniform1f(sensorValueUniform, sensorValue);
@@ -617,6 +678,7 @@ class HeatmapElement extends HTMLElement {
     #svg;
     #renderer;
     #observer;
+    #cuthi;
     connectedCallback() {
         this.#svg = this.closest('svg');
         if (!this.#svg) {
@@ -629,6 +691,7 @@ class HeatmapElement extends HTMLElement {
 
     setConfig(config) {
         this.#colorExpression = config.colorExpression;
+        this.#cuthi = config.cuthi;
         if (typeof config.dataUrl === "string" || config.dataUrl instanceof String) {
             config.dataUrl = [config.dataUrl];
         }
@@ -650,8 +713,15 @@ class HeatmapElement extends HTMLElement {
 
     }
 
+    setCUTHI(enabled) {
+        this.#cuthi = enabled;
+        this.#renderer.setCUTHI(enabled);
+        this.#renderer.render();
+    }
+
     setup() {
         this.#renderer = createRenderer(this.#data, this.#svg, this.#colormapCode, this.#colorExpression);
+        this.#renderer.setCUTHI(this.#cuthi);
         this.#observer = new Observer(this.#data, this.#svg, this.#renderer);
     }
 

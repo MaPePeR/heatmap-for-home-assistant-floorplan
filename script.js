@@ -120,6 +120,7 @@ function generateDistances() {
         const foreignObjectEl = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
         const heatmap = new (customElements.get("mppr-heatmap"));
         heatmap.setConfig({
+            cuthi: document.getElementById('cuthicheckbox').checked,
             dataUrl: [latestResultBlobUrl],
             colormapCode: [EXAMPLE_COLORMAP_URL, {integrity: EXAMPLE_COLORMAP_INTEGRITY}],
             colorExpression: EXAMPLE_COLORMAP_EXPR,
@@ -482,6 +483,8 @@ function checkIfFaceComplete(face) {
 
 function setupSensorInputs(results) {
     const sensorControlsDiv = document.getElementById('sensorcontrols');
+    const cuthiControlDiv = document.getElementById('cuthicontrols');
+    cuthiControlDiv.style.display = null;
     const inputs = [];
     const textarea_because_js_sucks = document.createElement('textarea');
     for (const areaId in results.areas) {
@@ -535,5 +538,14 @@ document.getElementById('sensorcontrols').addEventListener('click', function (e)
         el.classList.remove("invalid-sensor-value")
         el.classList.remove("no-sensor-value")
         floorplancontainer.querySelector(`#${el.dataset.sensorId}`).dataset.haFpHmSensorValue = value;
+    }
+})
+
+document.getElementById('cuthicheckbox').addEventListener('change', function (e) {
+    const checked = this.checked;
+    document.getElementById('cuthiconfig').innerText = checked ? "true" : "false";
+    const element = document.querySelector('mppr-heatmap');
+    if (element) {
+        element.setCUTHI(checked);
     }
 })
