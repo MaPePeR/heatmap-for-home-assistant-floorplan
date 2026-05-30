@@ -399,52 +399,52 @@ class Renderer {
         this.sensorValues.delete(sensorId);
     }
 
+    createTextureAndAttachToFB(width, height, fb, texture_unit) {
+        const texture = this.ctx.createTexture();
+
+        this.ctx.activeTexture(this.ctx.TEXTURE0 + texture_unit);
+
+        this.ctx.bindTexture(this.ctx.TEXTURE_2D, texture);
+
+        // define size and format of level 0
+        const txLevel = 0;
+        const internalFormat = this.ctx.R32F;
+        const border = 0;
+        const format = this.ctx.RED;
+        const type = this.ctx.FLOAT;
+        const data = null;
+        this.ctx.texImage2D(this.ctx.TEXTURE_2D, txLevel, internalFormat,
+                        width, height, border,
+                        format, type, data);
+    
+        // set the filtering so we don't need mips
+        this.ctx.texParameteri(this.ctx.TEXTURE_2D, this.ctx.TEXTURE_MIN_FILTER, this.ctx.LINEAR);
+        this.ctx.texParameteri(this.ctx.TEXTURE_2D, this.ctx.TEXTURE_WRAP_S, this.ctx.CLAMP_TO_EDGE);
+        this.ctx.texParameteri(this.ctx.TEXTURE_2D, this.ctx.TEXTURE_WRAP_T, this.ctx.CLAMP_TO_EDGE);
+
+        this.ctx.bindFramebuffer(this.ctx.FRAMEBUFFER, fb);
+
+        // attach the texture as the first color attachment
+        const attachmentPoint = this.ctx.COLOR_ATTACHMENT0;
+        const fbLevel = 0;
+        this.ctx.framebufferTexture2D(this.ctx.FRAMEBUFFER, attachmentPoint, this.ctx.TEXTURE_2D, texture, fbLevel);
+
+        if (this.ctx.checkFramebufferStatus(this.ctx.FRAMEBUFFER) !== this.ctx.FRAMEBUFFER_COMPLETE) {
+            throw new Error("Framebuffer is not complete");
+        }
+
+        this.ctx.bindFramebuffer(this.ctx.FRAMEBUFFER, null);
+        this.ctx.bindTexture(this.ctx.TEXTURE_2D, null);
+
+        return texture;
+    }
+
     setupTexturesIDW(width, height) {
         if (this.nTexture) {
             this.ctx.deleteTexture(this.nTexture);
         }
         if (this.dTexture) {
             this.ctx.deleteTexture(this.dTexture);
-        }
-
-        const createTextureAndAttachToFB = (fb, texture_unit) => {
-            const texture = this.ctx.createTexture();
-
-            this.ctx.activeTexture(this.ctx.TEXTURE0 + texture_unit);
-
-            this.ctx.bindTexture(this.ctx.TEXTURE_2D, texture);
-
-            // define size and format of level 0
-            const txLevel = 0;
-            const internalFormat = this.ctx.R32F;
-            const border = 0;
-            const format = this.ctx.RED;
-            const type = this.ctx.FLOAT;
-            const data = null;
-            this.ctx.texImage2D(this.ctx.TEXTURE_2D, txLevel, internalFormat,
-                            width, height, border,
-                            format, type, data);
-        
-            // set the filtering so we don't need mips
-            this.ctx.texParameteri(this.ctx.TEXTURE_2D, this.ctx.TEXTURE_MIN_FILTER, this.ctx.LINEAR);
-            this.ctx.texParameteri(this.ctx.TEXTURE_2D, this.ctx.TEXTURE_WRAP_S, this.ctx.CLAMP_TO_EDGE);
-            this.ctx.texParameteri(this.ctx.TEXTURE_2D, this.ctx.TEXTURE_WRAP_T, this.ctx.CLAMP_TO_EDGE);
-
-            this.ctx.bindFramebuffer(this.ctx.FRAMEBUFFER, fb);
-
-            // attach the texture as the first color attachment
-            const attachmentPoint = this.ctx.COLOR_ATTACHMENT0;
-            const fbLevel = 0;
-            this.ctx.framebufferTexture2D(this.ctx.FRAMEBUFFER, attachmentPoint, this.ctx.TEXTURE_2D, texture, fbLevel);
-
-            if (this.ctx.checkFramebufferStatus(this.ctx.FRAMEBUFFER) !== this.ctx.FRAMEBUFFER_COMPLETE) {
-                throw new Error("Framebuffer is not complete");
-            }
-
-            this.ctx.bindFramebuffer(this.ctx.FRAMEBUFFER, null);
-            this.ctx.bindTexture(this.ctx.TEXTURE_2D, null);
-
-            return texture;
         }
 
         if (!this.valueFrameBuffer) {
@@ -454,8 +454,8 @@ class Renderer {
             this.denomFrameBuffer = this.ctx.createFramebuffer();
         }
 
-        this.valueTexture = createTextureAndAttachToFB(this.valueFrameBuffer, 0);
-        this.denomTexture = createTextureAndAttachToFB(this.denomFrameBuffer, 1);
+        this.valueTexture = this.createTextureAndAttachToFB(width, height, this.valueFrameBuffer, 0);
+        this.denomTexture = this.createTextureAndAttachToFB(width, height, this.denomFrameBuffer, 1);
     }
 
     render() {
