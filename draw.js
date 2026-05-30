@@ -103,6 +103,7 @@ function readSensorData(data) {
     // Uint16 Sum(N_h) All vertex indices of faces 1..N_f
     const faceData = new Array(faceCount);
     let numberOfVertices = 0;
+    let sensorPosition = null;
     for (let i = 0; i < faceCount; i++) {
         const vertexCount = faceVertexCount[i];
         const indices = new Uint16Array(buffer, pos, vertexCount);
@@ -113,7 +114,16 @@ function readSensorData(data) {
             distanceData: faceDistanceData.subarray(i * 3, i * 3 + 3),
             earcutVertices: earcutFace(vertexPositions, indices),
         }
+        if (faceData[i].distanceData[2] === 0) {
+            if (sensorPosition !== null) {
+                throw new Error("Found multiple faces with distance 0 for sensor")
+            }
+            sensorPosition = faceData[i].distanceData.subarray(0,2);
+        }
         numberOfVertices += faceData[i].earcutVertices.length / 2;
+    }
+    if (sensorPosition === null) {
+        throw new Error("Did not find sensor position in distancedata");
     }
     const allFaceVertices = new Float16Array(numberOfVertices * 2);
     const allFaceDistanceData = new Float32Array(numberOfVertices * 3);
@@ -137,6 +147,7 @@ function readSensorData(data) {
         faces: faceData,
         allFaceVertices: allFaceVertices,
         allFaceDistanceData: allFaceDistanceData,
+        sensorPosition: sensorPosition,
     }
 }
 
@@ -318,6 +329,7 @@ class Renderer {
                 vertexCount: sensorData.allFaceVertices.length / 2,
                 vertexBuffer: vertexBuffer,
                 distanceBuffer: distanceBuffer,
+                sensorPosition: sensorData.sensorPosition,
             })
             
         });
