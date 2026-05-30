@@ -30,11 +30,12 @@ in vec2 v_pos;
 out float outColor;
 uniform float u_maxDistance;
 uniform float u_sensorValue;
+uniform float u_idw_p;
 
 void main() {
     vec2 d = v_pos - v_distance.xy;
     float l = (length(d) + v_distance.z) / u_maxDistance;
-    float v = u_sensorValue / (l * l);
+    float v = u_sensorValue / pow(l, u_idw_p);
     outColor = v;
 }
 `;
@@ -305,6 +306,7 @@ function createProgram(ctx, vertex_code, fragment_code, attributes, uniforms) {
 
 class Renderer {
     constructor(data, canvas, colormap_code, colormap_expression) {
+        this.idw_p = 2;
         this.cuthi = false;
         this.canvas = canvas;
         this.ctx = canvas.getContext("webgl2");
@@ -348,7 +350,7 @@ class Renderer {
             IDW_VERTEX_SHADER,
             IDW_FRAGMENT_SHADER,
             ['a_position', 'a_distance'],
-            ['u_scale', 'u_maxDistance', 'u_sensorValue'],
+            ['u_scale', 'u_maxDistance', 'u_sensorValue', 'u_idw_p'],
         )
 
         this.colorizeProgram = createProgram(
@@ -389,6 +391,11 @@ class Renderer {
         this.setupVertexArrayObjects(data);
         this.findSimplestSensors(data);
         this.render();
+    }
+
+    setIDWPower(power) {
+        this.idw_p = power;
+        this.redoDenominatorTexture = true;
     }
 
     setCUTHI(enabled) {
@@ -613,6 +620,8 @@ class Renderer {
             const maxDistanceUniform = this.renderTexProgram.uniforms.get('u_maxDistance');
             ctx.uniform1f(maxDistanceUniform, this.maxDistance);
 
+            ctx.uniform1f(this.renderTexProgram.uniforms.get("u_idw_p"), this.idw_p);
+
             ctx.enable(ctx.BLEND);
             ctx.blendFunc(ctx.ONE, ctx.ONE);
 
@@ -750,6 +759,7 @@ class Renderer {
             this.maxDistance,
         );
 
+        ctx.uniform1f(this.renderTexProgram.uniforms.get("u_idw_p"), this.idw_p);
 
         ctx.viewport(0, 0, ctx.canvas.width, ctx.canvas.height);
         ctx.clearColor(0,0,0,1);
@@ -1038,6 +1048,7 @@ class HeatmapElement extends HTMLElement {
     #renderer;
     #observer;
     #cuthi;
+    #idw_p;
     connectedCallback() {
         this.#svg = this.closest('svg');
         if (!this.#svg) {
@@ -1054,6 +1065,7 @@ class HeatmapElement extends HTMLElement {
             throw new Error("cuthi option has to be number or false")
         }
         this.#cuthi = config.cuthi || false;
+        this.#idw_p = config.idw_p || 2;
         if (typeof config.dataUrl === "string" || config.dataUrl instanceof String) {
             config.dataUrl = [config.dataUrl];
         }
@@ -1075,6 +1087,12 @@ class HeatmapElement extends HTMLElement {
 
     }
 
+    setIDWPower(power) {
+        this.#idw_p = power;
+        this.#renderer.setIDWPower(power)
+        this.#renderer.render();
+    }
+
     setCUTHI(enabled) {
         this.#cuthi = enabled;
         this.#renderer.setCUTHI(enabled);
@@ -1084,6 +1102,7 @@ class HeatmapElement extends HTMLElement {
     setup() {
         this.#renderer = createRenderer(this.#data, this.#svg, this.#colormapCode, this.#colorExpression);
         this.#renderer.setCUTHI(this.#cuthi);
+        this.#renderer.setIDWPower(this.#idw_p);
         this.#observer = new Observer(this.#data, this.#svg, this.#renderer);
     }
 

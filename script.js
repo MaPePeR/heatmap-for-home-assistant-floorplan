@@ -123,6 +123,7 @@ function generateDistances() {
             cuthi: document.getElementById('cuthicheckbox').checked
                 ? parseFloat(document.getElementById('cuthi_s_parameter_input').value, 10)
                 : false,
+            idw_p: parseFloat(document.getElementById('idw_p_parameter_input').value),
             dataUrl: [latestResultBlobUrl],
             colormapCode: [EXAMPLE_COLORMAP_URL, {integrity: EXAMPLE_COLORMAP_INTEGRITY}],
             colorExpression: EXAMPLE_COLORMAP_EXPR,
@@ -570,5 +571,14 @@ document.getElementById('cuthi_s_parameter_input').addEventListener('change', fu
     const element = document.querySelector('mppr-heatmap');
     if (element) {
         element.setCUTHI(s);
+    }
+})
+
+document.getElementById('idw_p_parameter_input').addEventListener('change', function () {
+    const v = parseFloat(this.value, 10);
+    document.getElementById('idw_p_config').innerText = v || 2;
+    const element = document.querySelector('mppr-heatmap');
+    if (element) {
+        element.setIDWPower(v);
     }
 })
