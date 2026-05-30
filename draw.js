@@ -83,6 +83,7 @@ out float outColor;
 uniform float u_maxDistance;
 uniform float u_sensorDistance;
 uniform sampler2D u_currentSensorDistanceTexture;
+uniform float u_cuthi_s;
 
 void main() {
     float currentSensorDistance = texture(u_currentSensorDistanceTexture, v_texCoord).r;
@@ -95,7 +96,7 @@ void main() {
     ) / (2.0 * u_sensorDistance * otherSensorDistance);
     float w = (cosAngle + 1.0) / 2.0;
     w = max(w, 0.0);
-    w = pow(w, 0.5);
+    w = pow(w, u_cuthi_s);
     outColor = w;
 }
 `;
@@ -371,7 +372,10 @@ class Renderer {
             CUTHI_FACTOR_VERTEX_SHADER,
             CUTHI_FACTOR_FRAGMENT_SHADER,
             ['a_position', 'a_distance'],
-            ['u_scale', 'u_maxDistance', 'u_sensorDistance', 'u_currentSensorDistanceTexture'],
+            [
+                'u_scale', 'u_maxDistance', 'u_sensorDistance',
+                'u_currentSensorDistanceTexture', 'u_cuthi_s',
+            ],
         )
 
         this.renderTextureProgram = createProgram(
@@ -769,13 +773,18 @@ class Renderer {
             this.maxDistance,
         );
 
-        
+        ctx.uniform1f(
+            this.cuthiFactorProgram.uniforms.get("u_cuthi_s"),
+            this.cuthi,
+        );
+
         ctx.activeTexture(ctx.TEXTURE0);
         ctx.bindTexture(ctx.TEXTURE_2D, this.valueTexture);
         ctx.uniform1i(
             this.cuthiFactorProgram.uniforms.get('u_currentSensorDistanceTexture'),
             0,
         );
+
 
         // Multiply CUTHI factors for all other sensors
         this.sensorRenderData.forEach((otherRenderData, otherSensorId) => {
@@ -1041,7 +1050,10 @@ class HeatmapElement extends HTMLElement {
 
     setConfig(config) {
         this.#colorExpression = config.colorExpression;
-        this.#cuthi = config.cuthi;
+        if (config.cuthi != undefined && config.cuthi != false && typeof config.cuthi != "number") {
+            throw new Error("cuthi option has to be number or false")
+        }
+        this.#cuthi = config.cuthi || false;
         if (typeof config.dataUrl === "string" || config.dataUrl instanceof String) {
             config.dataUrl = [config.dataUrl];
         }

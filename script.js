@@ -120,7 +120,9 @@ function generateDistances() {
         const foreignObjectEl = document.createElementNS("http://www.w3.org/2000/svg", "foreignObject");
         const heatmap = new (customElements.get("mppr-heatmap"));
         heatmap.setConfig({
-            cuthi: document.getElementById('cuthicheckbox').checked,
+            cuthi: document.getElementById('cuthicheckbox').checked
+                ? parseFloat(document.getElementById('cuthi_s_parameter_input').value, 10)
+                : false,
             dataUrl: [latestResultBlobUrl],
             colormapCode: [EXAMPLE_COLORMAP_URL, {integrity: EXAMPLE_COLORMAP_INTEGRITY}],
             colorExpression: EXAMPLE_COLORMAP_EXPR,
@@ -543,9 +545,30 @@ document.getElementById('sensorcontrols').addEventListener('click', function (e)
 
 document.getElementById('cuthicheckbox').addEventListener('change', function (e) {
     const checked = this.checked;
-    document.getElementById('cuthiconfig').innerText = checked ? "true" : "false";
+    const element = document.querySelector('mppr-heatmap');
+    document.getElementById('cuthi_s_parameter_input').disabled = !checked
+    if (checked) {
+        const s = parseFloat(document.getElementById('cuthi_s_parameter_input').value, 10)
+        document.getElementById('cuthiconfig').innerText = s.toString();
+        if (element) {
+            element.setCUTHI(s);
+        }
+    } else {
+        document.getElementById('cuthiconfig').innerText = "false";
+        if (element) {
+            element.setCUTHI(false);
+        }
+    }
+})
+
+document.getElementById('cuthi_s_parameter_input').addEventListener('change', function() {
+    if (!document.getElementById('cuthicheckbox').checked) {
+        return;
+    }
+    const s = parseFloat(document.getElementById('cuthi_s_parameter_input').value, 10)
+    document.getElementById('cuthiconfig').innerText = s.toString();
     const element = document.querySelector('mppr-heatmap');
     if (element) {
-        element.setCUTHI(checked);
+        element.setCUTHI(s);
     }
 })
