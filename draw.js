@@ -365,7 +365,7 @@ class Renderer {
         this.sensorValues.delete(sensorId);
     }
 
-    setupTextures(width, height) {
+    setupTexturesIDW(width, height) {
         if (this.nTexture) {
             this.ctx.deleteTexture(this.nTexture);
         }
@@ -425,6 +425,10 @@ class Renderer {
     }
 
     render() {
+        this.renderIDW();
+    }
+
+    renderIDW() {
         this.doRender = true;
         requestAnimationFrame(() => {
             if (!this.doRender) {
@@ -441,7 +445,7 @@ class Renderer {
                 console.log(`Resizing canvas from ${this.canvas.width}, ${this.canvas.height} to ${rect.width}, ${rect.height}`);
                 this.canvas.width = rect.width;
                 this.canvas.height = rect.height;
-                this.setupTextures(rect.width, rect.height);
+                this.setupTexturesIDW(rect.width, rect.height);
                 this.redoDenominatorTexture = true;
             }
 
