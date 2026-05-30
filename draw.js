@@ -39,6 +39,67 @@ void main() {
 }
 `;
 
+const DISTANCE_FRAGMENT_SHADER = `#version 300 es
+
+precision highp float;
+in vec3 v_distance;
+in vec2 v_pos;
+out float outColor;
+uniform float u_maxDistance;
+
+void main() {
+    vec2 d = v_pos - v_distance.xy;
+    float l = (length(d) + v_distance.z) / u_maxDistance;
+    outColor = l;
+}
+`;
+
+const CUTHI_FACTOR_VERTEX_SHADER = `#version 300 es
+
+layout(location=0) in vec2 a_position;
+in vec3 a_distance;
+out vec3 v_distance;
+out vec2 v_pos;
+out vec2 v_texCoord;
+uniform vec2 u_scale;
+
+
+void main() {
+    vec2 scaled = (a_position * vec2(2.0, 2.0) * u_scale - vec2(1.0, 1.0)) * vec2(1, -1);
+    gl_Position = vec4(scaled.xy, 0, 1);
+    v_pos = a_position;
+    v_distance = a_distance;
+    v_texCoord = (vec2(1,1) + scaled) / 2.0;
+}
+`
+
+const CUTHI_FACTOR_FRAGMENT_SHADER = `#version 300 es
+
+precision highp float;
+in vec3 v_distance;
+in vec2 v_pos;
+in vec2 v_texCoord;
+out float outColor;
+uniform float u_maxDistance;
+uniform float u_sensorDistance;
+uniform sampler2D u_currentSensorDistanceTexture;
+
+void main() {
+    float currentSensorDistance = texture(u_currentSensorDistanceTexture, v_texCoord).r;
+    vec2 d = v_pos - v_distance.xy;
+    float otherSensorDistance = (length(d) + v_distance.z) / u_maxDistance;
+    float cosAngle = (
+        u_sensorDistance * u_sensorDistance
+        + otherSensorDistance * otherSensorDistance
+        - currentSensorDistance * currentSensorDistance
+    ) / (2.0 * u_sensorDistance * otherSensorDistance);
+    float w = (cosAngle + 1.0) / 2.0;
+    w = max(w, 0.0);
+    w = pow(w, 0.5);
+    outColor = w;
+}
+`;
+
 const COLORIZE_VERTEX_SHADER = `#version 300 es
 
 layout(location=0) in vec2 a_position;
@@ -52,6 +113,20 @@ void main() {
     v_texCoord = (vec2(1,1) + scaled) / 2.0;
 }
 `;
+
+const RENDER_TEXTURE_FRAGMENT_SHADER = `#version 300 es
+
+precision highp float;
+
+in vec2 v_texCoord;
+out float outColor;
+uniform sampler2D u_texture;
+uniform float u_factor;
+
+void main() {
+    outColor = u_factor * texture(u_texture, v_texCoord).r;
+}
+`
 
 const COLORIZE_FRAGMENT_SHADER = `#version 300 es
 
@@ -244,6 +319,9 @@ class Renderer {
 
         this.valueFrameBuffer = null;
         this.denomFrameBuffer = null;
+
+        this.cuthiSensorTextures = null;
+        this.cuthiSensorFramebuffers = null;
         
         if (!this.ctx) {
             throw new Error("Couldn't get WebGL2 Context");
@@ -280,6 +358,30 @@ class Renderer {
             ['u_scale', 'u_value', 'u_denom'],
         )
 
+        this.distanceProgram = createProgram(
+            this.ctx,
+            IDW_VERTEX_SHADER,
+            DISTANCE_FRAGMENT_SHADER,
+            ['a_position'],
+            ['u_scale', 'u_maxDistance'],
+        )
+
+        this.cuthiFactorProgram = createProgram(
+            this.ctx,
+            CUTHI_FACTOR_VERTEX_SHADER,
+            CUTHI_FACTOR_FRAGMENT_SHADER,
+            ['a_position', 'a_distance'],
+            ['u_scale', 'u_maxDistance', 'u_sensorDistance', 'u_currentSensorDistanceTexture'],
+        )
+
+        this.renderTextureProgram = createProgram(
+            this.ctx,
+            COLORIZE_VERTEX_SHADER,
+            RENDER_TEXTURE_FRAGMENT_SHADER,
+            ['a_position'],
+            ['u_scale', 'u_texture', 'u_factor'],
+        )
+
         this.setupVertexArrayObjects(data);
         this.findSimplestSensors(data);
         this.render();
@@ -290,19 +392,21 @@ class Renderer {
             return;
         }
         this.cuthi = enabled;
-        if (this.cuthi) {
-            // CUTHI was enabled. Delete non-Cuthi resources
-            this.ctx.deleteTexture(this.denomTexture);
-            this.ctx.deleteTexture(this.valueTexture);
-            this.ctx.deleteFramebuffer(this.valueFrameBuffer);
-            this.ctx.deleteFramebuffer(this.denomFrameBuffer);
-            this.redoDenominatorTexture = true;
-            this.denomTexture = null;
-            this.valueTexture = null;
-            this.valueFrameBuffer = null;
-            this.denomFrameBuffer = null;
-        } else {
-            // TODO: Destroy cuthi resources
+        this.redoDenominatorTexture = true;
+        if (!this.cuthi) {
+            if (this.cuthiSensorTextures) {
+                // Delete textures
+                this.cuthiSensorTextures.forEach((t) => {
+                    this.ctx.deleteTexture(t);
+                })
+                this.cuthiSensorTextures = null;
+    
+                // Delete frame buffers
+                this.cuthiSensorFramebuffers.forEach(fb => {
+                    this.ctx.deleteFramebuffer(fb);
+                });
+                this.cuthiSensorFramebuffers = null;
+            }
         }
     }
 
@@ -455,7 +559,7 @@ class Renderer {
         }
 
         this.valueTexture = this.createTextureAndAttachToFB(width, height, this.valueFrameBuffer, 0);
-        this.denomTexture = this.createTextureAndAttachToFB(width, height, this.denomFrameBuffer, 1);
+        this.denomTexture = this.createTextureAndAttachToFB(width, height, this.denomFrameBuffer, 0);
     }
 
     render() {
@@ -571,6 +675,176 @@ class Renderer {
         })
     }
 
+    setupTexturesCUTHI(width, height) {
+        this.setupTexturesIDW(width, height);
+        if (this.cuthiSensorTextures) {
+            // Delete textures
+            this.cuthiSensorTextures.forEach((t) => {
+                this.ctx.deleteTexture(t);
+            })
+            this.cuthiSensorTextures = null;
+
+            // Delete frame buffers
+            this.cuthiSensorFramebuffers.forEach(fb => {
+                this.ctx.deleteFramebuffer(fb);
+            });
+            this.cuthiSensorFramebuffers = null;
+        }
+
+        this.cuthiSensorTextures = new Map();
+        this.cuthiSensorFramebuffers = new Map();
+
+        this.sensorRenderData.forEach((renderData, sensorId) => {
+            const fb = this.ctx.createFramebuffer();
+            this.cuthiSensorFramebuffers.set(sensorId, fb);
+            this.cuthiSensorTextures.set(sensorId, this.createTextureAndAttachToFB(width, height, fb, 0));
+        });
+    }
+
+    cuthiRenderWeightForSensor(sensorId) {
+        console.log("Cuthi factor for", sensorId)
+        const ctx = this.ctx;
+        const renderData = this.sensorRenderData.get(sensorId);
+
+        const fb = this.cuthiSensorFramebuffers.get(sensorId);
+
+        // First render distance to value texture
+        {
+            ctx.bindFramebuffer(ctx.FRAMEBUFFER, this.valueFrameBuffer);
+            ctx.useProgram(this.distanceProgram.prog);
+
+            ctx.uniform2fv(
+                this.distanceProgram.uniforms.get('u_scale'),
+                this.scale,
+            );
+
+            ctx.uniform1f(
+                this.distanceProgram.uniforms.get('u_maxDistance'),
+                this.maxDistance,
+            );
+
+            ctx.viewport(0, 0, ctx.canvas.width, ctx.canvas.height);
+            ctx.clearColor(0,0,0,1);
+            ctx.clear(ctx.COLOR_BUFFER_BIT);
+
+            this.ctx.bindVertexArray(this.vaos.get(sensorId));
+            console.log("Drawing distance data", sensorId, renderData.vertexCount);
+            this.ctx.drawArrays(this.ctx.TRIANGLES, 0, renderData.vertexCount);
+        }
+        // Weight calculation starts with normal IDW factor
+        ctx.bindFramebuffer(ctx.FRAMEBUFFER, fb);
+
+        ctx.useProgram(this.renderTexProgram.prog)
+
+        ctx.uniform2fv(
+            this.renderTexProgram.uniforms.get('u_scale'),
+            this.scale,
+        );
+
+        ctx.uniform1f(
+            this.renderTexProgram.uniforms.get('u_maxDistance'),
+            this.maxDistance,
+        );
+
+
+        ctx.viewport(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.clearColor(0,0,0,1);
+        ctx.clear(ctx.COLOR_BUFFER_BIT);
+
+        this.drawSensorWithValue(1, sensorId);
+
+        // Set Blend function to multiply
+        ctx.enable(ctx.BLEND);
+        ctx.blendFunc(ctx.DST_COLOR, ctx.ZERO);
+
+        ctx.useProgram(this.cuthiFactorProgram.prog);
+
+        ctx.uniform2fv(
+            this.cuthiFactorProgram.uniforms.get('u_scale'),
+            this.scale,
+        );
+
+        ctx.uniform1f(
+            this.cuthiFactorProgram.uniforms.get('u_maxDistance'),
+            this.maxDistance,
+        );
+
+        
+        ctx.activeTexture(ctx.TEXTURE0);
+        ctx.bindTexture(ctx.TEXTURE_2D, this.valueTexture);
+        ctx.uniform1i(
+            this.cuthiFactorProgram.uniforms.get('u_currentSensorDistanceTexture'),
+            0,
+        );
+
+        // Multiply CUTHI factors for all other sensors
+        this.sensorRenderData.forEach((otherRenderData, otherSensorId) => {
+            if (otherSensorId == sensorId) {
+                return;
+            }
+            const sensorDistance = Math.sqrt(
+                Math.pow(otherRenderData.sensorPosition[0] - renderData.sensorPosition[0], 2)
+                + Math.pow(otherRenderData.sensorPosition[1] - renderData.sensorPosition[1], 2)
+            ) / this.maxDistance;
+            
+            ctx.uniform1f(
+                this.cuthiFactorProgram.uniforms.get('u_sensorDistance'),
+                sensorDistance,
+            )
+
+            ctx.bindVertexArray(this.vaos.get(otherSensorId));
+            const vertexCount = this.sensorRenderData.get(otherSensorId).vertexCount
+            console.log("Multiply factor for ", otherSensorId);
+            ctx.drawArrays(ctx.TRIANGLES, 0, vertexCount);
+        })
+
+        ctx.disable(ctx.BLEND);
+        ctx.bindFramebuffer(ctx.FRAMEBUFFER, null);
+    }
+
+    cuthiWeightSum() {
+        const ctx = this.ctx;
+        ctx.bindFramebuffer(ctx.FRAMEBUFFER, this.denomFrameBuffer);
+        ctx.useProgram(this.renderTextureProgram.prog);
+
+        ctx.viewport(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.clearColor(0,0,0,1);
+        ctx.clear(ctx.COLOR_BUFFER_BIT);
+
+        ctx.enable(ctx.BLEND);
+        ctx.blendFunc(ctx.ONE, ctx.ONE);
+
+        ctx.uniform2fv(
+            this.renderTextureProgram.uniforms.get('u_scale'),
+            this.scale,
+        );
+
+        ctx.uniform1f(
+            this.renderTextureProgram.uniforms.get('u_factor'),
+            1.0,
+        );
+
+        ctx.activeTexture(ctx.TEXTURE0);
+        ctx.uniform1i(
+            this.renderTextureProgram.uniforms.get('u_texture'),
+            0,
+        );
+
+        this.sensorRenderData.forEach((_, sensorId) => {
+            ctx.bindTexture(ctx.TEXTURE_2D, this.cuthiSensorTextures.get(sensorId));
+
+            this.simplestSensorForArea.forEach((sensorId, _) => {
+                ctx.bindVertexArray(this.vaos.get(sensorId));
+                const vertexCount = this.sensorRenderData.get(sensorId).vertexCount
+                ctx.drawArrays(this.ctx.TRIANGLES, 0, vertexCount);
+            });
+        });
+        ctx.bindTexture(ctx.TEXTURE_2D, null);
+
+        ctx.disable(ctx.BLEND);
+        ctx.bindFramebuffer(ctx.FRAMEBUFFER, null);
+    }
+
     renderCUTHI() {
         this.doRender = true;
         requestAnimationFrame(() => {
@@ -584,11 +858,11 @@ class Renderer {
             rect.width = Math.floor(rect.width)
             rect.height = Math.floor(rect.height)
 
-            if (!this.denomTexture || this.canvas.width != rect.width || this.canvas.height != rect.height) {
+            if (!this.cuthiSensorTextures || this.canvas.width != rect.width || this.canvas.height != rect.height) {
                 console.log(`Resizing canvas from ${this.canvas.width}, ${this.canvas.height} to ${rect.width}, ${rect.height}`);
                 this.canvas.width = rect.width;
                 this.canvas.height = rect.height;
-                this.setupTexturesIDW(rect.width, rect.height);
+                this.setupTexturesCUTHI(rect.width, rect.height);
                 this.redoDenominatorTexture = true;
             }
 
@@ -601,8 +875,84 @@ class Renderer {
                 return;
             }
 
+            if (this.redoDenominatorTexture) {
+                this.redoDenominatorTexture = false;
+
+                this.sensorRenderData.forEach((_, sensorId) => {
+                    this.cuthiRenderWeightForSensor(sensorId);
+                });
+
+                this.cuthiWeightSum();
+            }
+
+            ctx.bindFramebuffer(ctx.FRAMEBUFFER, this.valueFrameBuffer);
+            ctx.enable(ctx.BLEND);
+            ctx.blendFunc(ctx.ONE, ctx.ONE);
+            ctx.viewport(0, 0, ctx.canvas.width, ctx.canvas.height);
             ctx.clearColor(0,0,0,1);
             ctx.clear(ctx.COLOR_BUFFER_BIT);
+
+            ctx.clearColor(0,0,0,1);
+            ctx.clear(ctx.COLOR_BUFFER_BIT);
+
+            ctx.useProgram(this.renderTextureProgram.prog);
+                
+            ctx.uniform2fv(
+                this.renderTextureProgram.uniforms.get('u_scale'),
+                this.scale,
+            );
+
+            ctx.activeTexture(ctx.TEXTURE0);
+            ctx.uniform1i(
+                this.renderTextureProgram.uniforms.get('u_texture'),
+                0,
+            );
+
+            this.sensorValues.forEach((sensorValue, sensorId) => {
+                ctx.bindTexture(ctx.TEXTURE_2D, this.cuthiSensorTextures.get(sensorId));
+                ctx.uniform1f(
+                    this.renderTextureProgram.uniforms.get('u_factor'),
+                    sensorValue,
+                );
+                this.simplestSensorForArea.forEach((sensorId, _) => {
+                    ctx.bindVertexArray(this.vaos.get(sensorId));
+                    const vertexCount = this.sensorRenderData.get(sensorId).vertexCount
+                    ctx.drawArrays(this.ctx.TRIANGLES, 0, vertexCount);
+                });
+            });
+
+            ctx.bindFramebuffer(ctx.FRAMEBUFFER, null);
+            ctx.disable(ctx.BLEND);
+
+            ctx.bindFramebuffer(ctx.FRAMEBUFFER, null);
+            
+            ctx.useProgram(this.colorizeProgram.prog);
+
+            ctx.viewport(0, 0, ctx.canvas.width, ctx.canvas.height);
+            ctx.clearColor(0,0,0,0);
+            ctx.clear(ctx.COLOR_BUFFER_BIT);
+
+            ctx.activeTexture(ctx.TEXTURE0);
+            ctx.bindTexture(ctx.TEXTURE_2D, this.valueTexture);
+            ctx.activeTexture(ctx.TEXTURE1);
+            ctx.bindTexture(ctx.TEXTURE_2D, this.denomTexture);
+
+            ctx.uniform2fv(this.colorizeProgram.uniforms.get('u_scale'), this.scale);
+
+            ctx.uniform1i(this.colorizeProgram.uniforms.get('u_value'), 0);
+            ctx.uniform1i(this.colorizeProgram.uniforms.get('u_denom'), 1);
+
+            this.simplestSensorForArea.forEach((sensorId, _) => {
+                ctx.bindVertexArray(this.vaos.get(sensorId));
+                const vertexCount = this.sensorRenderData.get(sensorId).vertexCount
+                console.log("Drawing colorized", sensorId, vertexCount);
+                ctx.drawArrays(this.ctx.TRIANGLES, 0, vertexCount);
+            });
+
+            ctx.activeTexture(ctx.TEXTURE0);
+            ctx.bindTexture(ctx.TEXTURE_2D, null);
+            ctx.activeTexture(ctx.TEXTURE1);
+            ctx.bindTexture(ctx.TEXTURE_2D, null);
         });
     }
 
