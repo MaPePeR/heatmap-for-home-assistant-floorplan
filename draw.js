@@ -113,7 +113,7 @@ function readSensorData(data) {
             distanceData: faceDistanceData.subarray(i * 3, i * 3 + 3),
             earcutVertices: earcutFace(vertexPositions, indices),
         }
-        numberOfVertices += faceData[i].earcutVertices.length;
+        numberOfVertices += faceData[i].earcutVertices.length / 2;
     }
     const allFaceVertices = new Float16Array(numberOfVertices * 2);
     const allFaceDistanceData = new Float32Array(numberOfVertices * 3);
@@ -315,7 +315,7 @@ class Renderer {
             ctx.bufferData(ctx.ARRAY_BUFFER, new Float32Array(sensorData.allFaceDistanceData), ctx.STATIC_DRAW)
 
             this.sensorRenderData.set(sensorId, {
-                vertexCount: sensorData.allFaceVertices.length / 3,
+                vertexCount: sensorData.allFaceVertices.length / 2,
                 vertexBuffer: vertexBuffer,
                 distanceBuffer: distanceBuffer,
             })
